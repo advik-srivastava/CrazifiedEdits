@@ -30,6 +30,8 @@ try {
   const before = (await q("SELECT id,title,status,delivery_date,duration_seconds,notes FROM reels ORDER BY id")).rows;
   const payBefore = (await q("SELECT week_ending,amount,paid_on,note FROM payments")).rows;
 
+  const old = path.join(path.dirname(fileURLToPath(import.meta.url)), ".old_v13.sql");
+  if (fs.existsSync(old)) { await q(fs.readFileSync(old, "utf8")); ok(true, "earlier V1.3 migration applied first (upgrade path)"); }
   await q(fs.readFileSync(repo + "migrate_v1_3.sql", "utf8"));
   await q(fs.readFileSync(repo + "migrate_v1_3.sql", "utf8")); // re-run must be safe
   ok(true, "migrate_v1_3.sql applies twice without error");
@@ -68,6 +70,9 @@ try {
   await q("UPDATE reels SET confirmed_rate_inr=1200 WHERE title='New'");
   await q("INSERT INTO sync_events (trigger,status) VALUES ('cron','running')");
   ok((await q("SELECT count(*)::int n FROM sync_events")).rows[0].n === 1, "sync_events insert works");
+  await q("INSERT INTO sync_events (trigger,status) VALUES ('auto','success')");
+  let badTrig = false; try { await q("INSERT INTO sync_events (trigger,status) VALUES ('bogus','success')"); } catch { badTrig = true; }
+  ok(badTrig, "sync_events accepts manual/cron/auto only");
   const rls = (await q("SELECT relname FROM pg_class WHERE relname IN ('reels','payments','app_settings','google_drive_connection','sync_events') AND relrowsecurity")).rows.length;
   ok(rls === 5, `RLS enabled on all 5 tables (${rls})`);
   const pol = (await q("SELECT count(*)::int n FROM pg_policies WHERE schemaname='public'")).rows[0].n;

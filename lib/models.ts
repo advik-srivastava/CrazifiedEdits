@@ -55,7 +55,7 @@ export type Settings = {
 export type Connection = { id: number; account_email: string | null; account_name: string | null; refresh_token_ciphertext: string; connected_at: string; connected_by?: string | null };
 export type SyncEvent = {
   id: number;
-  trigger: "manual" | "cron";
+  trigger: "manual" | "cron" | "auto";
   status: "running" | "success" | "error" | "skipped";
   started_at: string;
   finished_at: string | null;

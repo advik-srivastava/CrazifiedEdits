@@ -58,7 +58,7 @@ ALTER TABLE public.google_drive_connection ADD COLUMN IF NOT EXISTS connected_by
 
 CREATE TABLE IF NOT EXISTS public.sync_events (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-  trigger text NOT NULL CHECK (trigger IN ('manual','cron')),
+  trigger text NOT NULL,
   status text NOT NULL CHECK (status IN ('running','success','error','skipped')),
   started_at timestamptz NOT NULL DEFAULT now(),
   finished_at timestamptz,
@@ -68,6 +68,9 @@ CREATE TABLE IF NOT EXISTS public.sync_events (
   missing integer NOT NULL DEFAULT 0 CHECK (missing >= 0),
   error text CHECK (error IS NULL OR char_length(error) <= 500)
 );
+-- 'auto' = background sync started by a dashboard visit when the last sync is over 15 minutes old.
+ALTER TABLE public.sync_events DROP CONSTRAINT IF EXISTS sync_events_trigger_check;
+ALTER TABLE public.sync_events ADD CONSTRAINT sync_events_trigger_check CHECK (trigger IN ('manual','cron','auto'));
 CREATE INDEX IF NOT EXISTS sync_events_started ON public.sync_events (started_at DESC);
 
 -- ---------------------------------------------------------------- security

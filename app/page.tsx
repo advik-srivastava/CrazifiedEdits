@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { after } from "next/server";
+import { syncIfStale } from "@/lib/google-drive";
 import Image from "next/image";
 import { ArrowRight, Clapperboard, Eye, Instagram, LockKeyhole, ShieldCheck, Youtube } from "lucide-react";
 import { buildLedger, ledgerTotals, todayAndYesterday, todayInIndia } from "@/lib/billing";
@@ -11,6 +13,8 @@ import { ActivityPanel } from "@/components/activity";
 import { AutoRefresh, OfflineBanner } from "@/components/live";
 
 export const dynamic = "force-dynamic";
+// Room for the background Drive sync that may run after the page is sent.
+export const maxDuration = 60;
 
 function emptyDashboard(): Awaited<ReturnType<typeof getPublicDashboard>> {
   const weeks = buildLedger([], [], todayInIndia());
@@ -24,6 +28,8 @@ export default async function HomePage() {
   let databaseError = false;
   let dashboard = emptyDashboard();
   if (configured) {
+    // After the response is sent: refresh from Google Drive if the last sync is over 15 minutes old.
+    after(syncIfStale);
     try { dashboard = await getPublicDashboard(); }
     catch (error) {
       databaseError = true;

@@ -91,7 +91,7 @@ async function currentAccessToken(): Promise<string> {
   return refreshed.access_token!;
 }
 
-export type SyncTrigger = "manual" | "cron";
+export type SyncTrigger = "manual" | "cron" | "auto";
 export type SyncResult = { scanned: number; imported: number; updated: number; missing: number; folder: string; skipped: boolean };
 
 /** Claim the sync lock so a cron run and a manual "Sync now" never write at the same time. */
@@ -214,5 +214,27 @@ export async function syncGoogleDrive(trigger: SyncTrigger = "manual"): Promise<
     throw error;
   } finally {
     await releaseLock();
+  }
+}
+
+/** How old the last sync may get before a dashboard visit starts a new one in the background. */
+export const AUTO_SYNC_AFTER_MS = 15 * 60_000;
+
+/**
+ * Background "sync when stale": called after a dashboard page has been sent to the browser.
+ * Runs at most once per 15 minutes in total (checked here, and the sync lock stops overlaps), only when
+ * Google Drive is connected and a folder is chosen. Makes this work on Vercel Hobby, whose cron is daily.
+ * Never throws: failures are recorded in the sync log and shown in admin.
+ */
+export async function syncIfStale(now = Date.now()): Promise<void> {
+  try {
+    const settings = await getSettings();
+    if (!settings.folder_path) return;
+    const last = Math.max(Date.parse(settings.last_sync_at || "") || 0, Date.parse(settings.last_sync_started_at || "") || 0);
+    if (now - last < AUTO_SYNC_AFTER_MS) return;
+    if (!(await getConnection())) return;
+    await syncGoogleDrive("auto");
+  } catch (error) {
+    console.error("Automatic Google Drive sync failed:", error instanceof Error ? error.message : "Unknown error");
   }
 }

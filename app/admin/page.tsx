@@ -1,5 +1,7 @@
 import { headers } from "next/headers";
 import Link from "next/link";
+import { after } from "next/server";
+import { syncIfStale } from "@/lib/google-drive";
 import { LogOut, ShieldCheck, Sparkles, Video, Eye, AlertCircle } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
 import { getConnection, getDashboard, getSettings, getSyncEvents } from "@/lib/data";
@@ -19,9 +21,12 @@ function syncRunning(lockUntil: string | null | undefined): boolean {
 import { signOut } from "./actions";
 
 export const dynamic = "force-dynamic";
+// Room for the background Drive sync that may run after the page is sent.
+export const maxDuration = 60;
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ error?: string; success?: string }> }) {
   if (!isConfigured()) return <main className="centered"><div className="auth-panel"><span className="overline">SETUP REQUIRED</span><h1>Finish the environment setup</h1><p>Set the Supabase variables and <code>ADMIN_EMAIL</code> (see <code>.env.example</code>), run the SQL files in <code>sql/</code>, then restart or redeploy.</p><p>README.md has the step-by-step guide.</p></div></main>;
   const user = await requireAdmin();
+  after(syncIfStale);
   const params = await searchParams;
   let data;
   try {

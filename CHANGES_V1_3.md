@@ -2,7 +2,7 @@
 
 **Database:** run `sql/migrate_v1_3.sql` once (additive, transactional, re-runnable; existing reels and payments are untouched).
 **Environment:** no new variables. `ADMIN_EMAIL` may now list several emails separated by commas.
-**Hosting:** the Drive sync cron now runs every 15 minutes, which needs Vercel Pro (Hobby allows daily crons only and is non-commercial).
+**Hosting:** deploys on Vercel Hobby or Pro. Drive syncs automatically in the background when a dashboard is opened and the last sync is over 15 minutes old, plus a daily cron. (Vercel Hobby is non-commercial; Pro is the right plan for client work.)
 
 ## Fixed
 - **Production build failed** in V1.2.1 (`next build` type errors from `@supabase/ssr` 0.6). Upgraded to 0.12 and added `package-lock.json` so Vercel builds are reproducible.

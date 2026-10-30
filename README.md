@@ -29,10 +29,10 @@ Stack: Next.js 16 (App Router, TypeScript) · Supabase Postgres + Auth · Google
 - Refresh token is stored **encrypted (AES-256-GCM)** server-side in Supabase.
 - One record per Drive file ID (unique constraint). New files are inserted; existing ones get a metadata-only update, so sync can never overwrite status, delivery date, notes, links or prices.
 - Imports file name, Drive ID, view link, MIME type, created/modified time and duration (when Drive has processed it; it fills in on a later sync).
-- **Schedule:** every 15 minutes via Vercel Cron (`vercel.json`), plus **Sync now** in admin. A database lock prevents overlapping runs. Each run is recorded in `sync_events` (shown under *Sync history*).
+- **Schedule (works on Vercel Hobby):** whenever the client or admin dashboard is opened and the last sync is over 15 minutes old, a sync runs in the background after the page loads (so the page is never slowed). A daily Vercel Cron (`vercel.json`, 02:30 IST) is the fallback, plus **Sync now** in admin. A database lock prevents overlapping runs; each run is recorded in `sync_events` (*Sync history*).
 - Retries Google 429/5xx with backoff; clear messages for expired authorization, missing permissions and wrong folder links.
 - Likely re-uploads (e.g. "Copy of …", "(1)") are flagged in admin before they can be billed twice.
-- **Push notifications (Drive `changes.watch`) are not used.** They need a verified webhook domain and watch the whole Drive, not one folder. The 15-minute poll is metadata-only and cheap. See *Limitations*.
+- **Push notifications (Drive `changes.watch`) are not used.** They need a verified webhook domain and watch the whole Drive, not one folder. Polling is metadata-only and cheap. See *Limitations*.
 
 ## Privacy
 
@@ -95,7 +95,7 @@ Then `/login` → `/admin` → **Connect Google Drive** → paste your reel fold
 ### 5. Deploy to Vercel
 
 1. Import the GitHub repo in Vercel (framework: Next.js; defaults are fine).
-2. Use a **Pro** (or Enterprise) plan. Vercel's Hobby plan is for non-commercial use only, and only allows **daily** cron jobs; deploys with the 15-minute schedule in `vercel.json` will fail on Hobby. (Temporarily on Hobby? Change the schedule to `"0 3 * * *"`.)
+2. The included `vercel.json` (one daily cron) deploys on **Hobby** and Pro. Note that Vercel's Hobby plan is for non-commercial use only; client work like this is meant for **Pro**. On Pro you can optionally make the cron more frequent, e.g. `"*/15 * * * *"`.
 3. Add all environment variables for **Production** (and Preview if you use it), with `GOOGLE_REDIRECT_URI=https://YOUR-DOMAIN/api/gdrive/callback`.
 4. Deploy, then add that redirect URI in Google Cloud.
 5. Optional: add a custom domain. The client dashboard URL is the domain root, `https://YOUR-DOMAIN/`.
@@ -129,6 +129,6 @@ npm run verify       # lint + typecheck + unit tests + production build
 
 ## Limitations
 
-- Sync is polling (15 min on Pro), not instant push. Use **Sync now** for an immediate check.
+- Sync is polling, not instant push: a new upload appears on the next dashboard visit after 15 minutes have passed since the last sync (the visit that starts the sync shows it on the next refresh, within about a minute), or at the daily run. Use **Sync now** for an immediate check.
 - One sync handles up to about 10,000 videos / 120 sub-folders within Vercel's 60-second function limit.
 - Payments are recorded manually; this is a ledger, not a payment processor or accounting system.
