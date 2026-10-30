@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>CrazifiedEdits · Mohit Ledger Preview</title><link rel="stylesheet" href="preview.css"><style>
+.demo-banner{background:#efeaff;color:#5745b1;text-align:center;font-size:11px;font-weight:800;letter-spacing:.04em;padding:10px;position:sticky;top:0;z-index:100}
+.demo-admin{position:fixed;inset:0;background:#13121caa;z-index:150;display:none;align-items:center;justify-content:center;padding:20px}
+.demo-admin:target{display:flex}.demo-card{width:min(440px,100%);background:white;padding:32px;border-radius:20px;box-shadow:0 25px 80px #0c071060}.demo-card h2{margin:10px 0}.demo-card p{color:#6d7484}.demo-card .button{width:100%;text-align:center;display:flex;justify-content:center}
+.preview-toggle{font-weight:700;font-size:11px;color:#7066ca;cursor:pointer}.preview-toggle:hover{text-decoration:underline}
+</style></head><body>
+<div class="demo-banner">CRAZIFIEDEDITS · DESIGN PREVIEW ONLY · EXAMPLE REELS & PAYMENT RECORDS · NOT CONNECTED TO GOOGLE DRIVE</div>
+<header class="topbar"><div class="topbar-inner"><span class="brand crazified-brand"><img src="public/images/crazified-logo.png" width="158" height="43" alt="Crazified Studios logo"><strong class="product-brand-name">CrazifiedEdits</strong><small>BY CRAZIFIED STUDIOS</small></span><div class="header-right"><span class="header-label">PUBLIC DELIVERY LEDGER</span><a href="#admin-demo" class="header-admin-link">♙ Admin sign in <span>→</span></a></div></div></header>
+<main class="app-main public-main">
+<section class="public-hero"><div class="public-hero-copy"><div class="public-kicker"><span class="public-kicker-dot"></span> CRAZIFIEDEDITS <span class="public-kicker-rule"></span> CLIENT WORKSPACE</div><h1>Every reel.<br><span>Every payment.</span><br>All in one place.</h1><p>Live delivery logs, clear Sunday settlements, and direct Google Drive video access — a shared record for <strong>Advik</strong> and <strong>Mohit</strong>.</p><div class="public-hero-chips"><span>▣ Reel delivery log</span><span>✓ Transparent billing</span><span>◉ Read only</span></div></div><aside class="client-identity"><span class="client-identity-label">CLIENT ACCOUNT</span><div class="client-identity-main"><img src="public/images/mohit-avatar.png" width="62" height="62" alt="Client profile photo" class="mohit-avatar"><div><div class="client-name">Mohit</div><div class="client-handle">@OkayMohit</div></div></div><div class="identity-platforms"><span>▶ YouTube</span><span>◎ Instagram</span></div><div class="identity-divider"></div><div class="identity-editor"><span>CREATIVE PARTNER</span><strong>Advik <span>· Crazified Studios</span></strong></div></aside></section>
+<div class="public-subheader"><div><span class="eyebrow">CRAZIFIEDEDITS · SHARED LEDGER</span><h2>Reel logs &amp; payments</h2><p>Switch between billing weeks to review deliveries and payment history.</p></div><span class="pill pill-green"><span class="live-dot"></span> Client view</span></div>
+<div class="summary-header"><div><div class="eyebrow">PAYMENT OVERVIEW · WEEKS THROUGH 2030</div><h1>Your weekly payment overview</h1><p>Delivered reels and payments, organized Monday through Sunday.</p></div><div class="billing-navigation"><div class="billing-picker-row"><label class="year-selector">Year <select id="year" aria-label="Choose billing year"></select>⌄</label><label class="week-selector">▦ <select aria-label="Billing week" id="period"></select>⌄</label></div><div class="week-stepper"><button type="button" class="week-step" id="previous">‹ Previous</button><button type="button" class="week-current" id="current-week">Current week</button><button type="button" class="week-step" id="next">Next ›</button></div></div></div>
+<div class="stats-grid"><div class="stat-card"><div class="stat-top"><span>Reels delivered</span><span class="stat-icon">▣</span></div><strong class="stat-value" id="reels">25</strong><span class="stat-detail">Eligible reels up to 60 seconds</span></div><div class="stat-card"><div class="stat-top"><span>Total billed</span><span class="stat-icon">₹</span></div><strong class="stat-value" id="billed">₹15,000</strong><span class="stat-detail">₹600 per eligible reel</span></div><div class="stat-card"><div class="stat-top"><span>Payment received</span><span class="stat-icon">✓</span></div><strong class="stat-value" id="received">₹6,000</strong><span class="stat-detail">Recorded against this week</span></div><div class="stat-card stat-featured"><div class="stat-top"><span>Balance due</span><span class="stat-icon">↗</span></div><strong class="stat-value" id="due">₹9,000</strong><span class="stat-detail">Amount awaiting settlement</span></div></div>
+<div class="content-grid"><section class="surface chart-card"><div class="section-head"><div class="eyebrow">EARNINGS</div><h2>Weekly performance</h2><p>Revenue earned by billing week</p></div><div class="bar-chart" id="chart"></div></section><section class="surface settlement-card"><div class="section-head"><div class="eyebrow">BILLING DETAILS</div><h2>Week settlement</h2><p id="range">26 Oct 2026 – 1 Nov 2026</p></div><div class="receipt-lines"><div><span>Delivered reels</span><strong id="count">25</strong></div><div><span>Rate per reel</span><strong>₹600</strong></div><div><span>Subtotal</span><strong id="subtotal">₹15,000</strong></div><div><span>Paid to date</span><strong class="green-text" id="paid">– ₹6,000</strong></div><div class="receipt-total"><span>Amount due</span><strong id="total">₹9,000</strong></div></div><span class="pill pill-orange" id="settlement-status" style="margin-top:13px">Awaiting payment</span></section></div>
+<section class="surface log-card"><div class="table-heading"><div class="section-head"><div class="eyebrow">DELIVERY HISTORY</div><h2>Weekly reel log</h2><p>Example delivered videos linked to Google Drive</p></div><span class="soft-label"><span class="live-dot"></span> LIVE RECORD DESIGN</span></div><div class="table-scroll desktop-delivery-table"><table class="data-table"><thead><tr><th>REEL / VIDEO</th><th>DELIVERED</th><th>DURATION</th><th>STATUS</th><th class="align-right">AMOUNT</th><th class="align-right">FILE</th></tr></thead><tbody id="reel-rows"><tr><td><div class="file-name"><span class="small-file-icon">▶</span><span><strong>Gut Health: Morning Routine</strong><small>Google Drive synced</small></span></div></td><td>30 Oct 2026</td><td>0:58</td><td><span class="pill pill-blue">● Delivered</span></td><td class="align-right strong">₹600</td><td class="align-right"><span class="file-link">↗ Open</span></td></tr><tr><td><div class="file-name"><span class="small-file-icon">▶</span><span><strong>Fasting vs Snacking</strong><small>Google Drive synced</small></span></div></td><td>29 Oct 2026</td><td>0:45</td><td><span class="pill pill-green">● Approved</span></td><td class="align-right strong">₹600</td><td class="align-right"><span class="file-link">↗ Open</span></td></tr><tr><td><div class="file-name"><span class="small-file-icon">▶</span><span><strong>Protein Myths</strong><small>Google Drive synced</small></span></div></td><td>28 Oct 2026</td><td>1:00</td><td><span class="pill pill-blue">● Delivered</span></td><td class="align-right strong">₹600</td><td class="align-right"><span class="file-link">↗ Open</span></td></tr></tbody></table></div><div class="mobile-delivery-list" id="mobile-rows"></div></section>
+<section class="surface history-card"><div class="section-head"><div class="eyebrow">TRANSACTIONS</div><h2>Payment history</h2><p>Payments linked to the selected billing week</p></div><div class="payments-list" id="transactions"><div class="payment-row"><div class="payment-icon">✓</div><div class="payment-info"><strong>Payment received</strong><small>30 Oct 2026 · Bank transfer</small></div><strong class="green-text">+ ₹6,000</strong></div></div></section>
+<div class="public-bottom-strip"><span style="color:#665bd2">▣</span><span>Read-only access. Only Advik can edit reel records and payments after signing in. Google Drive files require separate Google sharing permission.</span><a href="#admin-demo">Studio login →</a></div>
+<footer class="app-footer"><span>© 2026 Crazified Studios · Produced by Advik</span><span>Made for Mohit (@OkayMohit) · ₹600/reel · Sunday billing</span></footer>
+</main>
+<section class="demo-admin" id="admin-demo"><div class="demo-card"><span class="overline">PRIVATE ADMIN ACCESS</span><h2>Studio sign in · Advik</h2><p>In the installed application, this opens <strong>/login</strong> to authenticate the studio admin. This static design preview does not accept passwords or modify records.</p><a class="button primary" href="#">Back to public ledger</a></div></section>
+<script>
+// Local preview only: every week is selectable; only two weeks contain fictional demo data.
+const money=n=>'₹'+n.toLocaleString('en-IN');
+const pad=n=>String(n).padStart(2,'0');
+const iso=d=>`${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`;
+const day=(text)=>new Date(text+'T12:00:00Z');
+const date=(s)=>day(s).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'});
+const periods=[];
+for(let start=day('2025-12-29');start<=day('2030-12-31');start.setUTCDate(start.getUTCDate()+7)){
+  const end=new Date(start);end.setUTCDate(end.getUTCDate()+6);
+  periods.push({start:iso(start),end:iso(end),year:iso(start)==='2025-12-29'?'2026':String(start.getUTCFullYear())});
+}
+const current='2026-11-01', earlier='2026-10-25';
+const vals={
+  [current]:[25,15000,6000,9000],
+  [earlier]:[19,11400,11400,0]
+};
+const period=document.getElementById('period'),year=document.getElementById('year');
+for(let yr=2026;yr<=2030;yr++)year.add(new Option(yr,yr));
+const reelRows=[document.querySelector('#reel-rows').innerHTML,
+  `<tr><td><div class="file-name"><span class="small-file-icon">▶</span><span><strong>Fitness Habits Reel</strong><small>Google Drive synced</small></span></div></td><td>23 Oct 2026</td><td>0:38</td><td><span class="pill pill-green">● Approved</span></td><td class="align-right strong">₹600</td><td class="align-right">—</td></tr>`];
+const paymentRows=[document.querySelector('#transactions').innerHTML,`<div class="payment-row"><div class="payment-icon">✓</div><div class="payment-info"><strong>Payment received</strong><small>25 Oct 2026 · Weekly settlement</small></div><strong class="green-text">+ ₹11,400</strong></div>`];
+function selectWeek(end){
+  const match=periods.find(x=>x.end===end)||periods[0];
+  year.value=match.year;
+  period.innerHTML='';
+  periods.filter(x=>x.year===match.year).forEach(x=>period.add(new Option(`${date(x.start)} – ${date(x.end)}`,x.end)));
+  period.value=match.end;
+  const [count,billed,received,due]=vals[match.end]||[0,0,0,0];
+  for(const [id,value] of Object.entries({reels:count,billed:money(billed),received:money(received),due:money(due),count,subtotal:money(billed),paid:'– '+money(received),total:money(due),range:date(match.start)+' – '+date(match.end)}))document.getElementById(id).textContent=value;
+  const badge=document.getElementById('settlement-status');badge.textContent=due?'Awaiting payment':'No balance due';badge.className='pill '+(due?'pill-orange':'pill-green');
+  document.querySelector('#reel-rows').innerHTML=match.end===current?reelRows[0]:match.end===earlier?reelRows[1]:'';
+  document.querySelector('#transactions').innerHTML=match.end===current?paymentRows[0]:match.end===earlier?paymentRows[1]:'<div class="no-transactions">No payments recorded for this week.</div>';
+  const rows=[...document.querySelector('#reel-rows').querySelectorAll('tr')];
+  document.querySelector('#mobile-rows').innerHTML=rows.length?rows.map(row=>{
+    const cells=[...row.querySelectorAll('td')];const title=cells[0]?.querySelector('strong')?.textContent||'';
+    return `<article class="mobile-reel-card"><div class="mobile-reel-top"><div class="mobile-reel-title"><span class="small-file-icon">▶</span><div><strong>${title}</strong><small>Google Drive synced</small></div></div>${cells[3].innerHTML}</div><div class="mobile-reel-details"><span>${cells[1].textContent}</span><span>${cells[2].textContent}</span><strong>${cells[4].textContent}</strong></div><div class="mobile-reel-action"><span class="file-link">Google Drive preview · sample only</span></div></article>`;
+  }).join(''):'<div class="empty-state">No reels logged for this week.</div>';
+  const index=periods.findIndex(x=>x.end===match.end);
+  document.getElementById('previous').disabled=index<=0;
+  document.getElementById('next').disabled=index>=periods.length-1;
+  document.getElementById('current-week').disabled=match.end===current;
+  const chart=periods.slice(Math.max(0,index-7),index+1);
+  const high=Math.max(600,...chart.map(x=>vals[x.end]?.[1]||0));
+  document.getElementById('chart').innerHTML=chart.map(x=>{const value=vals[x.end]?.[1]||0;return `<button type="button" class="bar-column ${x.end===match.end?'selected':''}" data-week="${x.end}" aria-label="Example ₹${value} week"><span class="bar-amount">${value?'₹'+(value/1000).toFixed(1)+'k':'₹0'}</span><span class="bar-track"><span class="bar-fill" style="height:${Math.max(4,value/high*100)}%"></span></span><span class="bar-label">${date(x.end).replace(' 2026','').replace(' 2027','').replace(' 2028','').replace(' 2029','').replace(' 2030','').replace(' 2031','')}</span></button>`}).join('');
+}
+year.addEventListener('change',()=>selectWeek(periods.find(x=>x.year===year.value)?.end||current));
+period.addEventListener('change',()=>selectWeek(period.value));
+document.getElementById('previous').addEventListener('click',()=>{const i=periods.findIndex(x=>x.end===period.value);if(i>0)selectWeek(periods[i-1].end)});
+document.getElementById('next').addEventListener('click',()=>{const i=periods.findIndex(x=>x.end===period.value);if(i<periods.length-1)selectWeek(periods[i+1].end)});
+document.getElementById('current-week').addEventListener('click',()=>selectWeek(current));
+document.getElementById('chart').addEventListener('click',e=>{const button=e.target.closest('[data-week]');if(button)selectWeek(button.dataset.week)});
+selectWeek(current);
+</script></body></html>
