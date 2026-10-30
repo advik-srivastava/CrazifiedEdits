@@ -2,77 +2,87 @@
 import { useMemo, useState } from "react";
 import { ArrowUpRight, CalendarDays, Clapperboard, CreditCard, Wallet, CheckCircle2, Video, ChevronDown, ChevronLeft, ChevronRight, AlertCircle } from "lucide-react";
 import type { LedgerReel, WeekSummary } from "@/lib/models";
-import { durationLabel, formatINR, prettyDate, reelFee, sundayFor, todayInIndia } from "@/lib/billing";
+import { CALENDAR_END, CALENDAR_START, durationLabel, formatINR, prettyDate, pricingState, reelFee, sundayFor, todayInIndia, weekStatus, weekStatusLabel, weekYear } from "@/lib/billing";
 import { Empty, Pill, SectionHeading, StatCard, Status } from "./ui";
 
-function reelSource(source:LedgerReel["source"]) {
-  return source==="google_drive"?"Google Drive synced":source==="onedrive"?"Legacy OneDrive link":"Manual entry";
+const YEARS = Array.from({ length: Number(CALENDAR_END.slice(0, 4)) - Number(CALENDAR_START.slice(0, 4)) + 1 }, (_, i) => String(Number(CALENDAR_START.slice(0, 4)) + i));
+const statusTone = { no_charges: "neutral", unpaid: "red", partial: "orange", paid: "green" } as const;
+
+function reelSource(source: LedgerReel["source"]) {
+  return source === "google_drive" ? "Google Drive" : source === "onedrive" ? "Legacy OneDrive link" : "Manual entry";
 }
-function FileAccess({reel}:{reel:LedgerReel}){
-  const url=reel.client_url||reel.drive_web_url;
-  return url?<a className="file-link" href={url} target="_blank" rel="noopener noreferrer" aria-label={`Open ${reel.title} on Google Drive`}><ArrowUpRight size={16}/><span>Open file</span></a>:<span className="muted">Not shared</span>;
+export function FileAccess({ reel }: { reel: LedgerReel }) {
+  const url = reel.client_url || reel.drive_web_url;
+  return url ? <a className="file-link" href={url} target="_blank" rel="noopener noreferrer" aria-label={`Open ${reel.title} in Google Drive`}><ArrowUpRight size={16} /><span>Open file</span></a> : <span className="muted">Not shared</span>;
 }
-function WeekTable({week}:{week:WeekSummary}){
-  const visible=[...week.reels].sort((a,b)=>(b.delivery_date||"").localeCompare(a.delivery_date||""));
-  if(!visible.length)return <Empty title="No delivered reels this week" description="When Advik marks a video delivered, it appears in this exact billing week." icon={<Clapperboard/>}/>;
+export function FeeLabel({ reel }: { reel: LedgerReel }) {
+  const state = pricingState(reel);
+  if (state === "review") return <Pill tone="orange">Pricing review</Pill>;
+  return <span title={state === "confirmed" ? "Confirmed price for a longer reel" : "Standard reel up to 60 seconds"}>{formatINR(reelFee(reel))}{state === "confirmed" && <small className="fee-note"> confirmed</small>}</span>;
+}
+function WeekReels({ week }: { week: WeekSummary }) {
+  const visible = [...week.reels].sort((a, b) => (b.delivery_date || "").localeCompare(a.delivery_date || ""));
+  if (!visible.length) return <Empty title="No reels delivered this week" description="This is an empty billing week, not missing data. Reels appear here as soon as they're marked delivered." icon={<Clapperboard />} />;
   return <>
     <div className="table-scroll desktop-delivery-table" role="region" aria-label="Weekly delivery table" tabIndex={0}>
-      <table className="data-table"><thead><tr><th>REEL / VIDEO</th><th>DELIVERED</th><th>DURATION</th><th>STATUS</th><th className="align-right">AMOUNT</th><th className="align-right">GOOGLE DRIVE</th></tr></thead>
-        <tbody>{visible.map(reel=><tr key={reel.id}>
-          <td><div className="file-name"><span className="small-file-icon"><Video size={16}/></span><span><strong title={reel.title}>{reel.title}</strong><small>{reelSource(reel.source)}</small></span></div></td>
-          <td>{prettyDate(reel.delivery_date!)}</td><td className="mono">{durationLabel(reel.duration_seconds)}</td><td><Status status={reel.status}/></td>
-          <td className="align-right strong mono">{reelFee(reel)?formatINR(reelFee(reel)):<Pill tone="orange">Unbilled</Pill>}</td>
-          <td className="align-right"><FileAccess reel={reel}/></td>
+      <table className="data-table"><thead><tr><th scope="col">REEL / VIDEO</th><th scope="col">DELIVERED</th><th scope="col">DURATION</th><th scope="col">STATUS</th><th scope="col" className="align-right">AMOUNT</th><th scope="col" className="align-right">GOOGLE DRIVE</th></tr></thead>
+        <tbody>{visible.map(reel => <tr key={reel.key}>
+          <td><div className="file-name"><span className="small-file-icon"><Video size={16} /></span><span><strong title={reel.title}>{reel.title}</strong><small>{reelSource(reel.source)}</small></span></div></td>
+          <td>{prettyDate(reel.delivery_date!)}</td><td className="mono">{durationLabel(reel.duration_seconds)}</td><td><Status status={reel.status} /></td>
+          <td className="align-right strong mono"><FeeLabel reel={reel} /></td>
+          <td className="align-right"><FileAccess reel={reel} /></td>
         </tr>)}</tbody></table>
     </div>
-    <div className="mobile-delivery-list">{visible.map(reel=><article className="mobile-reel-card" key={reel.id}>
-      <div className="mobile-reel-top"><div className="mobile-reel-title"><span className="small-file-icon"><Video size={17}/></span><div><strong>{reel.title}</strong><small>{reelSource(reel.source)}</small></div></div><Status status={reel.status}/></div>
-      <div className="mobile-reel-details"><span>{prettyDate(reel.delivery_date!)}</span><span>{durationLabel(reel.duration_seconds)}</span><strong>{reelFee(reel)?formatINR(reelFee(reel)):"Unbilled"}</strong></div>
-      <div className="mobile-reel-action"><FileAccess reel={reel}/></div>
-    </article>)}</div>
+    <ul className="mobile-delivery-list" aria-label="Reels delivered this week">{visible.map(reel => <li className="mobile-reel-card" key={reel.key}>
+      <div className="mobile-reel-top"><div className="mobile-reel-title"><span className="small-file-icon"><Video size={17} /></span><div><strong>{reel.title}</strong><small>{reelSource(reel.source)}</small></div></div><Status status={reel.status} /></div>
+      <div className="mobile-reel-details"><span>{prettyDate(reel.delivery_date!)}</span><span>{durationLabel(reel.duration_seconds)}</span><strong><FeeLabel reel={reel} /></strong></div>
+      <div className="mobile-reel-action"><FileAccess reel={reel} /></div>
+    </li>)}</ul>
   </>;
 }
-export function WeekLedger({weeks,clientView=false}:{weeks:WeekSummary[];clientView?:boolean}){
-  const current=sundayFor(todayInIndia());
-  const ordered=useMemo(()=>[...weeks].sort((a,b)=>a.ending.localeCompare(b.ending)),[weeks]);
-  const [end,setEnd]=useState(weeks.some(w=>w.ending===current)?current:weeks[0]?.ending||"");
-  const selected=weeks.find(w=>w.ending===end)||weeks[0];
-  const calendarYear=(w:WeekSummary)=>w.starting<"2026-01-01"&&w.ending>="2026-01-01"?"2026":w.starting.slice(0,4);
-  const years=useMemo(()=>[...new Set(weeks.map(calendarYear))].sort(),[weeks]);
-  const activeYear=selected?calendarYear(selected):"2026";
-  const yearWeeks=useMemo(()=>ordered.filter(w=>calendarYear(w)===activeYear),[ordered,activeYear]);
-  const selectedIndex=ordered.findIndex(w=>w.ending===selected?.ending);
-  const chartWeeks=ordered.slice(Math.max(0,selectedIndex-7),selectedIndex+1);
-  const maximum=Math.max(600,...chartWeeks.map(w=>w.billed));
-  const goYear=(year:string)=>{
-    const matches=ordered.filter(w=>calendarYear(w)===year);
-    if(matches.length)setEnd(year===todayInIndia().slice(0,4)&&matches.some(w=>w.ending===current)?current:matches[0].ending);
+export function WeekLedger({ weeks, clientView = false }: { weeks: WeekSummary[]; clientView?: boolean }) {
+  const current = sundayFor(todayInIndia());
+  const ordered = useMemo(() => [...weeks].sort((a, b) => a.ending.localeCompare(b.ending)), [weeks]);
+  const [end, setEnd] = useState(weeks.some(w => w.ending === current) ? current : weeks[0]?.ending || "");
+  const selected = weeks.find(w => w.ending === end) || weeks[0];
+  const years = useMemo(() => [...new Set([...YEARS, ...weeks.map(weekYear)])].sort(), [weeks]);
+  const activeYear = selected ? weekYear(selected) : YEARS[0];
+  const yearWeeks = useMemo(() => ordered.filter(w => weekYear(w) === activeYear), [ordered, activeYear]);
+  const selectedIndex = ordered.findIndex(w => w.ending === selected?.ending);
+  const chartWeeks = ordered.slice(Math.max(0, selectedIndex - 7), selectedIndex + 1);
+  const maximum = Math.max(600, ...chartWeeks.map(w => w.billed));
+  const goYear = (year: string) => {
+    const matches = ordered.filter(w => weekYear(w) === year);
+    if (matches.length) setEnd(matches.some(w => w.ending === current) ? current : matches[0].ending);
   };
-  if(!selected)return null;
-  return <>
-    <div className="summary-header"><div><div className="eyebrow">PAYMENT OVERVIEW · WEEKLY LOGS THROUGH 2030</div>
-      <h1>{clientView?"Your weekly payment overview":"Production overview"}</h1>
-      <p>Every week has its own Monday–Sunday reel log and payment balance.</p></div>
+  if (!selected) return null;
+  const status = weekStatus(selected);
+  const credit = selected.due < 0;
+  return <section aria-labelledby="weekly-heading">
+    <div className="summary-header"><div><div className="eyebrow">WEEKLY BILLING · MONDAY–SUNDAY · 2026–2030</div>
+      <h2 id="weekly-heading" className="summary-title">{clientView ? "Weekly reel log & payments" : "Production overview"}</h2>
+      <p>Every week has its own Monday–Sunday reel log and payment balance, settled on Sunday.</p></div>
       <div className="billing-navigation" aria-label="Billing week navigation">
-        <div className="billing-picker-row"><label className="year-selector"><span>Year</span><select value={activeYear} onChange={e=>goYear(e.target.value)} aria-label="Choose billing year">{years.map(y=><option key={y} value={y}>{y}</option>)}</select><ChevronDown size={15}/></label>
-          <label className="week-selector"><CalendarDays size={17}/><select value={selected.ending} onChange={e=>setEnd(e.target.value)} aria-label="Choose Monday to Sunday billing week">{yearWeeks.map(w=><option key={w.ending} value={w.ending}>{prettyDate(w.starting)} – {prettyDate(w.ending)}</option>)}</select><ChevronDown size={16}/></label></div>
-        <div className="week-stepper"><button type="button" className="week-step" onClick={()=>setEnd(ordered[selectedIndex-1].ending)} disabled={selectedIndex<=0} aria-label="Previous billing week"><ChevronLeft size={17}/> Previous</button>
-          <button type="button" className="week-current" onClick={()=>setEnd(current)} disabled={selected.ending===current}>Current week</button>
-          <button type="button" className="week-step" onClick={()=>setEnd(ordered[selectedIndex+1].ending)} disabled={selectedIndex>=ordered.length-1}>Next <ChevronRight size={17}/></button></div>
+        <div className="billing-picker-row"><label className="year-selector"><span>Year</span><select value={activeYear} onChange={e => goYear(e.target.value)} aria-label="Choose billing year">{years.map(y => <option key={y} value={y}>{y}</option>)}</select><ChevronDown size={15} aria-hidden /></label>
+          <label className="week-selector"><CalendarDays size={17} aria-hidden /><select value={selected.ending} onChange={e => setEnd(e.target.value)} aria-label="Choose Monday to Sunday billing week">{yearWeeks.map(w => <option key={w.ending} value={w.ending}>{prettyDate(w.starting)} – {prettyDate(w.ending)}{w.ending === current ? " (this week)" : ""}</option>)}</select><ChevronDown size={16} aria-hidden /></label></div>
+        <div className="week-stepper"><button type="button" className="week-step" onClick={() => setEnd(ordered[selectedIndex - 1].ending)} disabled={selectedIndex <= 0} aria-label="Previous billing week"><ChevronLeft size={17} /> <span>Previous</span></button>
+          <button type="button" className="week-current" onClick={() => setEnd(current)} disabled={selected.ending === current}>Current week</button>
+          <button type="button" className="week-step" onClick={() => setEnd(ordered[selectedIndex + 1].ending)} disabled={selectedIndex >= ordered.length - 1} aria-label="Next billing week"><span>Next</span> <ChevronRight size={17} /></button></div>
       </div>
     </div>
-    <div className="stats-grid"><StatCard label="Billable reels" value={selected.count} icon={<Clapperboard size={19}/>} detail="Up to 60 seconds each"/><StatCard label="Total billed" value={formatINR(selected.billed)} icon={<CreditCard size={19}/>} detail="₹600 per eligible reel"/><StatCard label="Payment received" value={formatINR(selected.received)} icon={<CheckCircle2 size={19}/>} detail="Recorded for this week"/><StatCard label="Balance due" value={formatINR(selected.due)} icon={<Wallet size={19}/>} detail={selected.due===0?"No outstanding balance":"Awaiting payment"} featured/></div>
-    <div className="content-grid"><section className="surface chart-card"><SectionHeading eyebrow="EARNINGS" title="Weekly performance" description="Eight billing periods ending at the selected week"/>
-      <div className="bar-chart" aria-label="Eight-week earnings chart">{chartWeeks.map(w=><button key={w.ending} type="button" title={`${prettyDate(w.ending)} • ${formatINR(w.billed)}`} onClick={()=>setEnd(w.ending)} className={`bar-column ${selected.ending===w.ending?"selected":""}`} aria-label={`View week ending ${prettyDate(w.ending)}, billed ${formatINR(w.billed)}`}>
-        <span className="bar-amount">{w.billed?`₹${(w.billed/1000).toFixed(1)}k`:"₹0"}</span><span className="bar-track"><span className="bar-fill" style={{height:`${Math.max(4,w.billed/maximum*100)}%`}}/></span>
-        <span className="bar-label">{new Date(`${w.ending}T12:00:00Z`).toLocaleDateString("en-IN",{day:"numeric",month:"short",timeZone:"UTC"})}</span></button>)}</div></section>
-      <section className="surface settlement-card"><SectionHeading eyebrow="BILLING DETAILS" title="Week settlement" description={`${prettyDate(selected.starting)} – ${prettyDate(selected.ending)}`}/><div className="receipt-lines"><div><span>Billable reels</span><strong>{selected.count}</strong></div><div><span>Rate per reel</span><strong>₹600</strong></div><div><span>Subtotal</span><strong>{formatINR(selected.billed)}</strong></div><div><span>Paid to date</span><strong className="green-text">– {formatINR(selected.received)}</strong></div><div className="receipt-total"><span>Amount due</span><strong>{formatINR(selected.due)}</strong></div></div><Pill tone={selected.due<=0?"green":"orange"}>{selected.due<=0?"Fully settled":"Awaiting payment"}</Pill></section></div>
-    <section className="surface log-card"><div className="table-heading"><SectionHeading eyebrow="DELIVERY HISTORY" title="Weekly reel log" description={`${selected.reels.length} delivered video${selected.reels.length===1?"":"s"} · ${selected.count} billable · ${prettyDate(selected.starting)} – ${prettyDate(selected.ending)}`}/><span className="soft-label"><span className="live-dot"/>LIVE RECORD</span></div><WeekTable week={selected}/></section>
-    <section className="surface history-card"><SectionHeading eyebrow="TRANSACTIONS" title="Payment history" description="Payments linked only to the selected billing week"/>{selected.payments.length?<div className="payments-list">{selected.payments.map(payment=><div className="payment-row" key={payment.id}><div className="payment-icon"><CheckCircle2 size={18}/></div><div className="payment-info"><strong>Payment received</strong><small>{prettyDate(payment.paid_on)}{payment.note?` · ${payment.note}`:""}</small></div><strong className="green-text">+ {formatINR(Number(payment.amount))}</strong></div>)}</div>:<div className="no-transactions"><AlertCircle size={18}/><span>No payments recorded for this week.</span></div>}</section>
-  </>;
+    <p className="week-range-announce" aria-live="polite">{prettyDate(selected.starting)} – {prettyDate(selected.ending)} · <span className={`week-status week-status-${status}`}>{weekStatusLabel[status]}</span></p>
+    <div className="stats-grid"><StatCard label="Reels delivered" value={selected.delivered} icon={<Clapperboard size={19} />} detail={selected.reviewCount ? `${selected.count} billed · ${selected.reviewCount} in pricing review` : `${selected.count} billed this week`} /><StatCard label="Amount billed" value={formatINR(selected.billed)} icon={<CreditCard size={19} />} detail="₹600 per reel up to 60 s" /><StatCard label="Amount received" value={formatINR(selected.received)} icon={<CheckCircle2 size={19} />} detail={`${selected.payments.length} payment${selected.payments.length === 1 ? "" : "s"} this week`} /><StatCard label={credit ? "Credit" : "Balance due"} value={formatINR(Math.abs(selected.due))} icon={<Wallet size={19} />} detail={weekStatusLabel[status]} featured /></div>
+    <div className="content-grid"><section className="surface chart-card"><SectionHeading eyebrow="EARNINGS" title="Weekly performance" description="Eight billing weeks ending at the selected week" />
+      <div className="bar-chart" role="group" aria-label="Eight-week billing chart">{chartWeeks.map(w => <button key={w.ending} type="button" title={`${prettyDate(w.ending)} • ${formatINR(w.billed)}`} onClick={() => setEnd(w.ending)} className={`bar-column ${selected.ending === w.ending ? "selected" : ""}`} aria-pressed={selected.ending === w.ending} aria-label={`Week ending ${prettyDate(w.ending)}, billed ${formatINR(w.billed)}`}>
+        <span className="bar-amount">{w.billed ? `₹${(w.billed / 1000).toFixed(1)}k` : "₹0"}</span><span className="bar-track"><span className="bar-fill" style={{ height: `${Math.max(4, w.billed / maximum * 100)}%` }} /></span>
+        <span className="bar-label">{new Date(`${w.ending}T12:00:00Z`).toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" })}</span></button>)}</div></section>
+      <section className="surface settlement-card"><SectionHeading eyebrow="SUNDAY SETTLEMENT" title="Week settlement" description={`${prettyDate(selected.starting)} – ${prettyDate(selected.ending)}`} /><div className="receipt-lines"><div><span>Billed reels</span><strong>{selected.count}</strong></div>{selected.reviewCount > 0 && <div><span>Awaiting pricing review</span><strong>{selected.reviewCount}</strong></div>}<div><span>Standard rate</span><strong>₹600 / reel</strong></div><div><span>Subtotal</span><strong>{formatINR(selected.billed)}</strong></div><div><span>Paid to date</span><strong className="green-text">– {formatINR(selected.received)}</strong></div><div className="receipt-total"><span>{credit ? "Credit" : "Amount due"}</span><strong>{formatINR(Math.abs(selected.due))}</strong></div></div><Pill tone={statusTone[status]}>{weekStatusLabel[status]}</Pill></section></div>
+    <section className="surface log-card"><div className="table-heading"><SectionHeading eyebrow="DELIVERY HISTORY" title="Weekly reel log" description={`${selected.delivered} delivered · ${selected.count} billed · ${prettyDate(selected.starting)} – ${prettyDate(selected.ending)}`} /><span className="soft-label"><span className="live-dot" />LIVE RECORD</span></div><WeekReels week={selected} /></section>
+    <section className="surface history-card"><SectionHeading eyebrow="TRANSACTIONS" title="Payment history" description="Full and partial payments allocated to the selected billing week" />{selected.payments.length ? <ul className="payments-list">{selected.payments.map(payment => <li className="payment-row" key={payment.id}><div className="payment-icon"><CheckCircle2 size={18} /></div><div className="payment-info"><strong>Payment received</strong><small>{prettyDate(payment.paid_on)}{!clientView && payment.method ? ` · ${payment.method}` : ""}{!clientView && payment.note ? ` · ${payment.note}` : ""}</small></div><strong className="green-text">+ {formatINR(Number(payment.amount))}</strong></li>)}</ul> : <div className="no-transactions"><AlertCircle size={18} /><span>No payments recorded for this week.</span></div>}</section>
+  </section>;
 }
-export function UnpricedReels({reels}:{reels:LedgerReel[]}){
-  const excluded=reels.filter(r=>["delivered","revision","approved"].includes(r.status)&&r.delivery_date&&!reelFee(r));
-  if(!excluded.length)return null;
-  return <div className="warning-message"><AlertCircle size={18}/><div><strong>{excluded.length} delivered video(s) not yet billed</strong><p>Duration is missing or over 60 seconds. Confirm pricing separately; these videos are not included in ₹600 totals.</p></div></div>;
+export function UnpricedReels({ reels, clientView = false }: { reels: LedgerReel[]; clientView?: boolean }) {
+  const excluded = reels.filter(r => pricingState(r) === "review");
+  if (!excluded.length) return null;
+  return <div className="warning-message" role="status"><AlertCircle size={18} /><div><strong>{excluded.length} delivered reel{excluded.length === 1 ? "" : "s"} awaiting pricing review</strong><p>{clientView ? "These are longer than 60 seconds (or their length is still being confirmed), so they aren't included in the ₹600 totals until a price is agreed." : "Over 60 seconds or unknown length. Set a confirmed price in Edit to bill them; until then they're excluded from totals."}</p></div></div>;
 }

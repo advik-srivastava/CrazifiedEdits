@@ -1,2 +1,2 @@
 import Link from "next/link";
-export default function NotFound(){return <main className="centered"><div className="auth-panel"><span className="overline">CRAZIFIEDEDITS</span><h1>Page not found.</h1><p className="muted">Check your URL or return to the admin login.</p><Link className="button primary" href="/login">Go to login</Link></div></main>}
+export default function NotFound() { return <main className="centered"><div className="auth-panel"><span className="overline">CRAZIFIEDEDITS</span><h1>Page not found.</h1><p className="muted">This page doesn&apos;t exist. The reel and payment ledger is on the homepage.</p><Link className="button primary" href="/">Open the ledger</Link></div></main>; }

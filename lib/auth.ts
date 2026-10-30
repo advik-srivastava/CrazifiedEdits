@@ -1,16 +1,25 @@
 import "server-only";
 import { redirect } from "next/navigation";
 import { userDb } from "./supabase";
+import { isAdminEmail } from "./admin-emails";
 
-export async function adminUser() {
+async function sessionUser() {
   const client = await userDb();
   const { data: { user }, error } = await client.auth.getUser();
-  if (error || !user || !user.email || !process.env.ADMIN_EMAIL || user.email.toLowerCase() !== process.env.ADMIN_EMAIL.toLowerCase()) return null;
-  return user;
+  return error ? null : user;
 }
+export async function adminUser() {
+  const user = await sessionUser();
+  return user && isAdminEmail(user.email) ? user : null;
+}
+/** Server-side gate for every admin page and action. Hiding buttons is never the protection. */
 export async function requireAdmin() {
-  const user = await adminUser();
+  const user = await sessionUser();
   if (!user) redirect("/login");
+  if (!isAdminEmail(user.email)) {
+    await (await userDb()).auth.signOut().catch(() => undefined);
+    redirect("/login?denied=1");
+  }
   return user;
 }
 export async function assertAdminApi(): Promise<boolean> {
