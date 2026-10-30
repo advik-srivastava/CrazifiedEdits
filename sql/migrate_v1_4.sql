@@ -67,4 +67,11 @@ BEGIN
   END IF;
 END $$;
 
+-- ---------------------------------------------------------------- deleted reels
+-- A deleted reel (by the admin, or because its file was deleted from Drive) is cancelled and hidden.
+-- The row is kept so a Drive file that still exists is never re-imported and billed again.
+ALTER TABLE public.reels ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
+UPDATE public.reels SET deleted_at = COALESCE(drive_missing_at, now()) WHERE removed_by_sync AND deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS reels_deleted ON public.reels (deleted_at) WHERE deleted_at IS NOT NULL;
+
 COMMIT;

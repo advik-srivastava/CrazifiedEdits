@@ -6,7 +6,8 @@ import { serviceDb, userDb } from "@/lib/supabase";
 import { googleFolderId, validAmount, validDate, validDuration, validUrl, statuses, paymentMethods } from "@/lib/validation";
 import { BILLED_STATES, sundayFor, todayInIndia, withinStandardLength } from "@/lib/billing";
 import { ensureDriveWatch, stopDriveWatch, syncGoogleDrive } from "@/lib/google-drive";
-import type { ReelStatus } from "@/lib/models";
+import type { Reel, ReelStatus } from "@/lib/models";
+import { canPurge, deletePatch, isDeleted, restorePatch } from "@/lib/reel-delete";
 
 function fail(error: unknown): never {
   const message = error instanceof Error ? error.message : "Something went wrong";
@@ -68,30 +69,45 @@ export async function markDelivered(form: FormData) {
   } catch (error) { fail(error); }
   success("Marked delivered today. It now appears in this week's log.", "#reels");
 }
-/**
- * Remove a reel from the workflow. Google Drive reels are set to Cancelled (deleting them would
- * let the next sync re-import them). Manual entries can be deleted outright.
- */
-export async function removeReel(form: FormData) {
+const REEL_FIELDS = "id,title,source,status,status_before_removal,deleted_at,drive_missing_at";
+async function loadReel(id: string) {
+  const { data, error } = await serviceDb().from("reels").select(REEL_FIELDS).eq("id", id).single();
+  if (error || !data) throw new Error(/deleted_at/.test(error?.message || "") ? "Run sql/migrate_v1_4.sql in Supabase to enable deleting reels." : "Reel not found.");
+  return data as Pick<Reel, "id" | "title" | "source" | "status" | "status_before_removal" | "deleted_at" | "drive_missing_at">;
+}
+/** Delete a reel: off the delivery log, out of billing, hidden from the library. Payments are not changed. Restorable. */
+export async function deleteReel(form: FormData) {
   await requireAdmin();
-  let message = "";
+  let title = "";
   try {
-    const id = uuid(field(form, "id"), "reel");
-    const db = serviceDb();
-    const { data: reel, error } = await db.from("reels").select("id,source,status").eq("id", id).single();
-    if (error || !reel) throw new Error("Reel not found.");
-    if (BILLED_STATES.has(reel.status)) throw new Error("Delivered reels are part of the billing record. To correct one, change its status in Edit.");
-    if (reel.source === "manual") {
-      const { error: delError } = await db.from("reels").delete().eq("id", id);
-      if (delError) throw new Error("Unable to delete the reel.");
-      message = "Manual reel deleted.";
-    } else {
-      const { error: upError } = await db.from("reels").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", id);
-      if (upError) throw new Error("Unable to cancel the reel.");
-      message = "Reel cancelled. It stays out of billing and future syncs won't bill it.";
-    }
+    const reel = await loadReel(uuid(field(form, "id"), "reel"));
+    if (isDeleted(reel)) throw new Error("This reel is already deleted.");
+    const { error } = await serviceDb().from("reels").update(deletePatch(reel, new Date().toISOString())).eq("id", reel.id);
+    if (error) throw new Error("Unable to delete the reel.");
+    title = reel.title;
   } catch (error) { fail(error); }
-  success(message, "#reels");
+  success(`Deleted “${title.slice(0, 60)}”. It's off the delivery log and billing. Restore it from the Deleted filter if needed.`, "#reels");
+}
+export async function restoreReel(form: FormData) {
+  await requireAdmin();
+  try {
+    const reel = await loadReel(uuid(field(form, "id"), "reel"));
+    if (!isDeleted(reel)) throw new Error("This reel isn't deleted.");
+    const { error } = await serviceDb().from("reels").update(restorePatch(reel, new Date().toISOString())).eq("id", reel.id);
+    if (error) throw new Error("Unable to restore the reel.");
+  } catch (error) { fail(error); }
+  success("Reel restored with its previous status and billing.", "#reels");
+}
+/** Permanently delete. Only for reels that can't come back via sync (manual entries, or Drive files already gone). */
+export async function purgeReel(form: FormData) {
+  await requireAdmin();
+  try {
+    const reel = await loadReel(uuid(field(form, "id"), "reel"));
+    if (!canPurge(reel)) throw new Error("Delete it first. Drive videos can only be deleted permanently after the file is gone from Drive, or the next sync would bring it back.");
+    const { error } = await serviceDb().from("reels").delete().eq("id", reel.id).not("deleted_at", "is", null);
+    if (error) throw new Error("Unable to delete the reel permanently.");
+  } catch (error) { fail(error); }
+  success("Reel deleted permanently.", "#reels");
 }
 export async function addManualReel(form: FormData) {
   await requireAdmin();

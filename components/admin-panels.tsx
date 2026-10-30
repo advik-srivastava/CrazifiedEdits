@@ -1,15 +1,16 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { AlertCircle, ArrowUpRight, CheckCircle2, Cloud, ExternalLink, FileVideo, FolderOpen, Link2, PlusCircle, RefreshCcw, Settings2, Shield, X, Clock3, PackageCheck, Copy, CloudOff, History, Pencil, Zap, Wand2 } from "lucide-react";
+import { AlertCircle, ArrowUpRight, CheckCircle2, Cloud, ExternalLink, FileVideo, FolderOpen, Link2, PlusCircle, RefreshCcw, Settings2, Shield, X, Clock3, PackageCheck, Copy, CloudOff, History, Pencil, Zap, Wand2 , Trash2, RotateCcw } from "lucide-react";
 import type { Connection, Payment, Reel, Settings, SyncEvent } from "@/lib/models";
 import { billingCalendar, durationLabel, formatINR, prettyDate, prettyDateTime, pricingState, reelFee, sundayFor, todayInIndia, uploadDateOf, withinStandardLength } from "@/lib/billing";
 import { possibleDuplicates } from "@/lib/sync-plan";
+import { canPurge, isDeleted } from "@/lib/reel-delete";
 import { paymentMethods } from "@/lib/validation";
-import { addManualReel, disconnectGoogleDrive, markDelivered, reconnectNotifications, removePayment, removeReel, saveAutomation, saveFolder, savePayment, saveReel, syncNow, updatePayment } from "@/app/admin/actions";
+import { addManualReel, disconnectGoogleDrive, deleteReel, markDelivered, purgeReel, reconnectNotifications, removePayment, restoreReel, saveAutomation, saveFolder, savePayment, saveReel, syncNow, updatePayment } from "@/app/admin/actions";
 import { Empty, Pill, SectionHeading, Status } from "./ui";
 
-export function SubmitButton({ children, variant = "primary", pendingLabel = "Saving…" }: { children: React.ReactNode, variant?: "primary" | "secondary" | "subtle", pendingLabel?: string }) {
+export function SubmitButton({ children, variant = "primary", pendingLabel = "Saving…" }: { children: React.ReactNode, variant?: "primary" | "secondary" | "subtle" | "danger", pendingLabel?: string }) {
   const { pending } = useFormStatus();
   return <button className={`button ${variant}`} type="submit" disabled={pending} aria-busy={pending}>{pending ? pendingLabel : children}</button>;
 }
@@ -51,12 +52,14 @@ export function AddReelForm() {
     <div className="wide align-end"><SubmitButton><PlusCircle size={16} aria-hidden /> Add to delivery log</SubmitButton></div></form></section>;
 }
 
-type Filter = "all" | "discovered" | "review" | "delivered" | "approved" | "revision" | "cancelled" | "missing";
+type Filter = "all" | "discovered" | "review" | "delivered" | "approved" | "revision" | "cancelled" | "missing" | "deleted";
 function ReelFlags({ reel, duplicateOf }: { reel: Reel; duplicateOf?: Reel }) {
   const flags: React.ReactNode[] = [];
   if (duplicateOf) flags.push(<span key="dup" className="reel-flag flag-warn"><Copy size={13} aria-hidden />Possible re-upload of “{duplicateOf.title}”</span>);
   if (pricingState(reel) === "review") flags.push(<span key="price" className="reel-flag flag-warn"><AlertCircle size={13} aria-hidden />Pricing review required</span>);
-  if (reel.removed_by_sync) flags.push(<span key="gone" className="reel-flag flag-muted"><CloudOff size={13} aria-hidden />Removed: deleted from Drive{reel.status_before_removal ? ` (was ${reel.status_before_removal === "discovered" ? "pending" : reel.status_before_removal})` : ""}</span>);
+  const was = reel.status_before_removal ? ` (was ${reel.status_before_removal === "discovered" ? "pending" : reel.status_before_removal})` : "";
+  if (reel.removed_by_sync) flags.push(<span key="gone" className="reel-flag flag-muted"><CloudOff size={13} aria-hidden />Deleted automatically: file deleted from Drive{was}</span>);
+  else if (reel.deleted_at) flags.push(<span key="del" className="reel-flag flag-muted"><Trash2 size={13} aria-hidden />Deleted by you{was}{reel.drive_missing_at ? " · file also gone from Drive" : ""}</span>);
   else if (reel.drive_missing_at) flags.push(<span key="gone" className="reel-flag flag-muted"><CloudOff size={13} aria-hidden />No longer in Drive folder</span>);
   if (reel.auto_delivered && reel.status !== "cancelled") flags.push(<span key="auto" className="reel-flag flag-info"><Zap size={13} aria-hidden />Auto-delivered</span>);
   if ((reel.revision_count || 0) > 0 && reel.status !== "discovered") flags.push(<span key="rev" className="reel-flag flag-muted"><History size={13} aria-hidden />File changed in Drive after review ({reel.revision_count}×)</span>);
@@ -77,24 +80,49 @@ function ReelEditor({ reel }: { reel: Reel }) {
     <div className="wide edit-footer"><div className="edit-links">{reel.drive_web_url && <a target="_blank" rel="noopener noreferrer" href={reel.drive_web_url}><ExternalLink size={15} aria-hidden /> Original Drive file</a>}<span className="muted mini-note">{needsPrice ? "Over 60 s or unknown length: billed only at the confirmed price." : "Delivered reels up to 60 s bill at ₹600."}</span></div><SubmitButton>Save changes</SubmitButton></div>
   </form>;
 }
+function DeleteReel({ reel }: { reel: Reel }) {
+  const fee = reelFee(reel);
+  const effect = fee > 0 && reel.delivery_date ? ` Its ${formatINR(fee)} charge comes off the week of ${prettyDate(reel.delivery_date)}.` : "";
+  return <form action={deleteReel} className="delete-row" onSubmit={confirmSubmit(`Delete “${reel.title}”?\n\nIt will be removed from the delivery log and billing, and hidden from the client.${effect} Payments aren't changed. You can restore it from the Deleted filter.`)}>
+    <input type="hidden" name="id" value={reel.id} />
+    <span className="muted mini-note">Removes it from the delivery log and billing. {reel.source === "google_drive" ? "The file in Google Drive isn't touched." : ""}</span>
+    <SubmitButton variant="danger" pendingLabel="Deleting…"><Trash2 size={16} aria-hidden /> Delete video</SubmitButton>
+  </form>;
+}
+function DeletedActions({ reel }: { reel: Reel }) {
+  return <div className="deleted-actions">
+    <p className="muted mini-note">Deleted {reel.deleted_at ? prettyDateTime(reel.deleted_at) : ""}. It isn&apos;t on the delivery log, in billing or visible to the client.</p>
+    <div className="quick-actions">
+      <form action={restoreReel}><input type="hidden" name="id" value={reel.id} /><SubmitButton pendingLabel="Restoring…"><RotateCcw size={16} aria-hidden /> Restore{reel.status_before_removal ? ` as ${reel.status_before_removal === "discovered" ? "pending review" : reel.status_before_removal}` : ""}</SubmitButton></form>
+      {canPurge(reel)
+        ? <form action={purgeReel} onSubmit={confirmSubmit(`Permanently delete “${reel.title}”? This can't be undone.`)}><input type="hidden" name="id" value={reel.id} /><SubmitButton variant="danger" pendingLabel="Deleting…"><Trash2 size={16} aria-hidden /> Delete permanently</SubmitButton></form>
+        : <span className="muted mini-note">The file is still in your Drive folder, so it&apos;s kept here (deleted) to stop the next sync re-adding it. Delete the file in Drive to allow permanent deletion.</span>}
+    </div>
+  </div>;
+}
 export function AdminReelList({ reels }: { reels: Reel[] }) {
   const [filter, setFilter] = useState<Filter>("all"); const [search, setSearch] = useState("");
   const [maxVisible, setMaxVisible] = useState(60);
-  const duplicates = useMemo(() => possibleDuplicates(reels), [reels]);
-  const pending = reels.filter(r => r.status === "discovered").length;
-  const reviewPricing = reels.filter(r => pricingState(r) === "review").length;
-  const matches = (r: Reel) => filter === "all" ? true : filter === "review" ? pricingState(r) === "review" : filter === "missing" ? !!r.drive_missing_at : r.status === filter;
+  const live = useMemo(() => reels.filter(r => !isDeleted(r)), [reels]);
+  const deletedCount = reels.length - live.length;
+  const duplicates = useMemo(() => possibleDuplicates(live), [live]);
+  const pending = live.filter(r => r.status === "discovered").length;
+  const reviewPricing = live.filter(r => pricingState(r) === "review").length;
+  const matches = (r: Reel) => filter === "deleted" ? isDeleted(r) : isDeleted(r) ? false : filter === "all" ? true : filter === "review" ? pricingState(r) === "review" : filter === "missing" ? !!r.drive_missing_at : r.status === filter;
   const matching = reels.filter(r => matches(r) && r.title.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => Number(b.status === "discovered") - Number(a.status === "discovered"));
   const visible = matching.slice(0, maxVisible);
-  return <section className="surface reels-manager" id="reels"><div className="section-top"><SectionHeading eyebrow="REVIEW & DELIVERY" title="Your reel library" description={`${reels.length} reels · ${pending} pending review · ${reviewPricing} need a price`} /><Pill tone={pending ? "orange" : "green"}>{pending ? `${pending} pending review` : "All reviewed"}</Pill></div>
-    <div className="tools-bar"><input type="search" aria-label="Search reels" className="search-input" placeholder="Search by reel name..." value={search} onChange={e => { setSearch(e.target.value); setMaxVisible(60); }} /><select value={filter} onChange={e => { setFilter(e.target.value as Filter); setMaxVisible(60); }} aria-label="Filter reels"><option value="all">All reels</option><option value="discovered">Pending review</option><option value="review">Pricing review required</option><option value="delivered">Delivered</option><option value="approved">Approved</option><option value="revision">Revision</option><option value="cancelled">Cancelled</option><option value="missing">No longer in Drive</option></select></div>
-    {!visible.length ? <Empty title="No reels found" description={reels.length ? "Try another filter or search." : "Connect Google Drive and sync your delivery folder, or add a reel manually."} icon={<FileVideo />} /> : <div className="edit-list">{visible.map(reel => {
+  return <section className="surface reels-manager" id="reels"><div className="section-top"><SectionHeading eyebrow="REVIEW & DELIVERY" title="Your reel library" description={`${live.length} reels · ${pending} pending review · ${reviewPricing} need a price${deletedCount ? ` · ${deletedCount} deleted` : ""}`} /><Pill tone={pending ? "orange" : "green"}>{pending ? `${pending} pending review` : "All reviewed"}</Pill></div>
+    <div className="tools-bar"><input type="search" aria-label="Search reels" className="search-input" placeholder="Search by reel name..." value={search} onChange={e => { setSearch(e.target.value); setMaxVisible(60); }} /><select value={filter} onChange={e => { setFilter(e.target.value as Filter); setMaxVisible(60); }} aria-label="Filter reels"><option value="all">All reels</option><option value="discovered">Pending review</option><option value="review">Pricing review required</option><option value="delivered">Delivered</option><option value="approved">Approved</option><option value="revision">Revision</option><option value="cancelled">Cancelled</option><option value="missing">No longer in Drive</option><option value="deleted">Deleted{deletedCount ? ` (${deletedCount})` : ""}</option></select></div>
+    {!visible.length ? <Empty title="No reels found" description={filter === "deleted" ? "Nothing deleted. Deleted reels (by you, or because the file was deleted from Drive) appear here." : reels.length ? "Try another filter or search." : "Connect Google Drive and sync your delivery folder, or add a reel manually."} icon={<FileVideo />} /> : <div className="edit-list">{visible.map(reel => {
       const uploaded = uploadDateOf(reel);
-      return <details className={`reel-item ${reel.status === "discovered" ? "reel-pending" : ""}`} key={reel.id}><summary><span className="file-icon"><FileVideo size={20} aria-hidden /></span><span className="reel-description"><strong title={reel.title}>{reel.title}</strong><small>{uploaded ? `Uploaded ${prettyDate(uploaded)}` : "Upload date unknown"} · {reel.delivery_date ? `Delivered ${prettyDate(reel.delivery_date)}` : "Not delivered"} · {durationLabel(reel.duration_seconds)} · {reel.source === "google_drive" ? "Google Drive" : reel.source === "onedrive" ? "OneDrive (legacy)" : "Manual"}</small><ReelFlags reel={reel} duplicateOf={duplicates.get(reel.id)} /></span><span className="reel-value">{pricingState(reel) === "review" ? "—" : formatINR(reelFee(reel))}</span><Status status={reel.status} /><span className="edit-action">Edit <Settings2 size={15} aria-hidden /></span></summary>
+      return <details className={`reel-item ${reel.status === "discovered" ? "reel-pending" : ""} ${isDeleted(reel) ? "reel-deleted" : ""}`} key={reel.id}><summary><span className="file-icon"><FileVideo size={20} aria-hidden /></span><span className="reel-description"><strong title={reel.title}>{reel.title}</strong><small>{uploaded ? `Uploaded ${prettyDate(uploaded)}` : "Upload date unknown"} · {reel.delivery_date ? `Delivered ${prettyDate(reel.delivery_date)}` : "Not delivered"} · {durationLabel(reel.duration_seconds)} · {reel.source === "google_drive" ? "Google Drive" : reel.source === "onedrive" ? "OneDrive (legacy)" : "Manual"}</small><ReelFlags reel={reel} duplicateOf={duplicates.get(reel.id)} /></span><span className="reel-value">{pricingState(reel) === "review" ? "—" : formatINR(reelFee(reel))}</span><Status status={isDeleted(reel) ? "deleted" : reel.status} /><span className="edit-action">{isDeleted(reel) ? <>Restore <RotateCcw size={15} aria-hidden /></> : <>Edit <Settings2 size={15} aria-hidden /></>}</span></summary>
         <div className="edit-pane">
-          {reel.status === "discovered" && <div className="quick-actions"><form action={markDelivered}><input type="hidden" name="id" value={reel.id} /><SubmitButton pendingLabel="Marking…"><PackageCheck size={16} aria-hidden /> Mark delivered today</SubmitButton></form><form action={removeReel} onSubmit={confirmSubmit(reel.source === "manual" ? "Delete this manual reel?" : "Cancel this reel? It won't be billed, and future syncs won't re-add it.")}><input type="hidden" name="id" value={reel.id} /><SubmitButton variant="subtle" pendingLabel="Removing…"><X size={16} aria-hidden /> {reel.source === "manual" ? "Delete" : "Not a deliverable"}</SubmitButton></form></div>}
-          <ReelEditor reel={reel} />
+          {isDeleted(reel) ? <DeletedActions reel={reel} /> : <>
+            {reel.status === "discovered" && <div className="quick-actions"><form action={markDelivered}><input type="hidden" name="id" value={reel.id} /><SubmitButton pendingLabel="Marking…"><PackageCheck size={16} aria-hidden /> Mark delivered today</SubmitButton></form></div>}
+            <ReelEditor reel={reel} />
+            <DeleteReel reel={reel} />
+          </>}
         </div>
       </details>;
     })}{matching.length > visible.length && <div className="load-more-reels"><button className="button secondary" type="button" onClick={() => setMaxVisible(n => n + 60)}>Show 60 more ({matching.length - visible.length} remaining)</button></div>}</div>}</section>;

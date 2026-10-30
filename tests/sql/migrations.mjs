@@ -109,6 +109,12 @@ try {
   ok((await q("SELECT relrowsecurity r FROM pg_class WHERE relname='payment_claims'")).rows[0].r === true, "payment_claims has RLS on");
   ok((await q("SELECT count(*)::int n FROM pg_policies WHERE tablename='payment_claims'")).rows[0].n === 0, "payment_claims has no public policies");
 
+  // V1.4 deleted reels: column exists, auto-removed rows are backfilled as deleted, manual delete works.
+  await q("UPDATE reels SET removed_by_sync=true, status='cancelled', status_before_removal='delivered', deleted_at=NULL WHERE title='New'");
+  await q(fs.readFileSync(repo + "migrate_v1_4.sql", "utf8"));
+  ok((await q("SELECT deleted_at IS NOT NULL d FROM reels WHERE title='New'")).rows[0].d === true, "previously auto-removed reels become deleted");
+  await q("UPDATE reels SET deleted_at=now(), status='cancelled' WHERE drive_item_id='f1'");
+  ok((await q("SELECT count(*)::int n FROM reels WHERE deleted_at IS NOT NULL")).rows[0].n === 2, "reels can be marked deleted");
   // A fresh project path: schema.sql then migrate_v1_3.sql.
   await q("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
   await q(fs.readFileSync(repo + "schema.sql", "utf8"));

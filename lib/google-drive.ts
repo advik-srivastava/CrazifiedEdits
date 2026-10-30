@@ -260,7 +260,7 @@ export async function syncGoogleDrive(trigger: SyncTrigger = "manual", depth = 0
         if (error) throw new Error("Could not flag removed files.");
       }
       for (const [status, idList] of plan.cancelByStatus) for (const ids of chunks(idList)) {
-        const { error } = await db.from("reels").update({ status: "cancelled", removed_by_sync: true, status_before_removal: status, updated_at: now })
+        const { error } = await db.from("reels").update({ status: "cancelled", removed_by_sync: true, status_before_removal: status, deleted_at: now, updated_at: now })
           .in("id", ids).eq("status", status);
         if (error) throw new Error("Could not remove deleted files from the delivery log.");
       }

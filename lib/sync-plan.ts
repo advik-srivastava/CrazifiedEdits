@@ -38,7 +38,7 @@ export type MetadataRow = {
   drive_item_id: string; source: "google_drive"; title: string; drive_web_url: string; mime_type: string | null;
   drive_created_at: string | null; drive_modified_at: string | null; drive_folder_id: string | null; last_seen_at: string; drive_missing_at: null; updated_at: string;
 };
-export type RowPatch = { drive_item_id: string; patch: { duration_seconds?: number; revision_count?: number; status?: string; removed_by_sync?: boolean; status_before_removal?: null } };
+export type RowPatch = { drive_item_id: string; patch: { duration_seconds?: number; revision_count?: number; status?: string; removed_by_sync?: boolean; status_before_removal?: null; deleted_at?: null } };
 
 export const FOLDER_MIME = "application/vnd.google-apps.folder";
 const VIDEO_EXT = /\.(mp4|mov|m4v|webm|avi|mkv)$/i;
@@ -123,6 +123,7 @@ export function planSync(items: DriveItem[], existing: Map<string, ExistingRow>,
       patch.status = old.status_before_removal || "discovered";
       patch.removed_by_sync = false;
       patch.status_before_removal = null;
+      patch.deleted_at = null;
     }
     if (Object.keys(patch).length) patches.push({ drive_item_id: item.id, patch });
   }

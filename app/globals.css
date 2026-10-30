@@ -352,3 +352,12 @@ ul.mobile-delivery-list,ul.payments-list,.activity-list,.sync-log ul{list-style:
 .claim-item{min-width:0}
 .claim-actions .button{white-space:normal;text-align:center}
 @media(max-width:760px){.edit-links a{display:inline-flex;align-items:center;min-height:44px}}
+/* Deleting reels */
+.button.danger{background:#fff;border-color:#f1c9c5;color:#c0392b}
+.button.danger:hover{background:#fff4f3;border-color:#e59b93}
+.delete-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:16px;padding-top:14px;border-top:1px dashed var(--border)}
+.delete-row .mini-note{flex:1 1 200px}
+.deleted-actions .quick-actions{border-bottom:0;margin-bottom:0;padding-bottom:0;align-items:center}
+.deleted-actions>p{margin:0 0 12px}
+.reel-deleted>summary{opacity:.72}
+@media(max-width:760px){.delete-row .button{width:100%}}

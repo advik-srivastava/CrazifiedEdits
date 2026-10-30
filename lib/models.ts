@@ -27,6 +27,8 @@ export type Reel = {
   auto_delivered?: boolean | null;
   removed_by_sync?: boolean | null;
   status_before_removal?: ReelStatus | null;
+  /** Set when the reel is deleted (by you, or because its file was deleted from Drive). Hidden from the library. */
+  deleted_at?: string | null;
 };
 /** Fields that are safe to show on the public client dashboard. No internal IDs. */
 export type LedgerReel = {

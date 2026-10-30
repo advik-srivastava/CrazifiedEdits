@@ -107,7 +107,7 @@ test("existing reels are never re-delivered or overwritten by auto-delivery", ()
 });
 test("a file that comes back after automatic removal gets its previous status back", () => {
   const back = planSync([item()], new Map([["fileA123456789012345", row({ status: "cancelled", removed_by_sync: true, status_before_removal: "approved" })]]), NOW);
-  assert.deepEqual(back.patches[0].patch, { status: "approved", removed_by_sync: false, status_before_removal: null });
+  assert.deepEqual(back.patches[0].patch, { status: "approved", removed_by_sync: false, status_before_removal: null, deleted_at: null });
   assert.equal(back.restored, 1);
   const manual = planSync([item()], new Map([["fileA123456789012345", row({ status: "cancelled", removed_by_sync: false })]]), NOW);
   assert.equal(manual.patches.length, 0, "a reel you cancelled yourself stays cancelled");

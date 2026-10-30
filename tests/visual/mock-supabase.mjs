@@ -41,6 +41,7 @@ const reels = [
   ...Array.from({ length: 9 }, (_, i) => reel(`Weekly reel ${i + 1} — fitness series.mp4`, "approved", istDate(Date.parse(`${mon(1)}T06:30:00Z`) + (i % 7) * DAY), 30 + i * 3, mon(1))),
   ...Array.from({ length: 6 }, (_, i) => reel(`Recipe short ${i + 1}.mp4`, "delivered", istDate(Date.parse(`${mon(2)}T06:30:00Z`) + (i % 7) * DAY), 50, mon(2))),
   reel("Cancelled test upload.mp4", "cancelled", null, 20, d(-3)),
+  reel("Deleted outtake.mp4", "cancelled", null, 33, d(-2), { deleted_at: iso(d(-1)), status_before_removal: "delivered", removed_by_sync: true, drive_missing_at: iso(d(-1)) }),
   { ...reel("Old manual entry.mp4", "delivered", mon(3), 52, mon(3)), source: "manual", drive_item_id: null }
 ];
 const payments = [
