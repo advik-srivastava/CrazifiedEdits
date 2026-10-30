@@ -1,111 +1,134 @@
-# CrazifiedEdits V1.2.1 · by Crazified Studios
+# CrazifiedEdits · by Crazified Studios
 
-**Google Drive video sync · Individual Monday–Sunday billing weeks through 2030 · iPhone/mobile-first reel log · ₹600 per reel (up to 60 seconds) · Advik admin + Mohit (@OkayMohit) public dashboard.**
+Reel delivery log and weekly payment ledger for **Mohit (@OkayMohit)**, edited by **Advik**.
+Google Drive sync · Monday–Sunday billing weeks through 2030 · ₹600 per reel up to 60 seconds · mobile-first.
 
-The home page (`/`) is **public and read-only**. Advik signs in at `/login` and edits reels/payments at `/admin`. This is a real Next.js/Supabase app; `preview.html` contains **fictional sample data only** and does not access Google Drive or Supabase.
+| Route | Who | What |
+|---|---|---|
+| `/` | Anyone with the URL | Read-only client dashboard: totals, Today/Yesterday, weekly reel log, Drive links, payments |
+| `/login` | Admin | Supabase email + password sign-in |
+| `/admin` | Admin only (server-enforced) | Review uploads, mark delivered, prices, payments, Google Drive, sync log |
 
-## UPGRADING FROM V1.2 (name-only update)
+Stack: Next.js 16 (App Router, TypeScript) · Supabase Postgres + Auth · Google Drive API · Vercel.
 
-If you already configured Google Drive and ran the V1.2 Supabase migration, **no SQL change is required**. Just extract this release separately, copy your existing `.env.local` into the new folder, then run `npm install` and `npm run dev`. All existing Supabase reels, payments and Google Drive connection data are preserved.
+---
 
-## UPGRADING your EXISTING V1.1 setup
+## Billing rules
 
-**You already created a Supabase project and ran `sql/schema.sql` for V1.1. Keep that project: do not delete its tables or run the new initial schema.**
+- **₹600 per reel** that is *delivered* (status Delivered, Approved or Revision, with a delivery date) and **1–60 seconds long** (60 s exactly is billable).
+- **New Drive uploads are never billed automatically.** They arrive as **Pending review**. Billing starts only when the admin marks a reel delivered.
+- **Over 60 s, or unknown length → "Pricing review required."** These reels are listed in the weekly log but excluded from totals until the admin enters a **Confirmed price** for that reel.
+- **Billing week** = the Monday–Sunday week containing the delivery date (settled Sunday). Every week from 29 Dec 2025 – 4 Jan 2026 through 30 Dec 2030 – 5 Jan 2031 is selectable, including empty weeks. A week that crosses New Year is filed under the year its Monday falls in (the first week counts as 2026).
+- **Weekly billed** = sum of billed reels delivered that week. **Balance due** = weekly billed − payments allocated to that week. Status: *No charges · Unpaid · Partially paid · Paid* (an overpayment shows as a credit).
+- **Upload date ≠ delivery date.** Today/Yesterday (India time) count uploads by the Drive file's creation time, and deliveries/billing by delivery date.
+- **Stable history:** once a reel is past review its duration is locked against Drive changes; renames update the title of the same record; files removed from Drive are flagged, never deleted. Delivered reels can't be removed with one click; correct them deliberately in Edit.
 
-1. Extract this **V1.2 ZIP** into a **new folder**. Back up your old V1.1 folder before changing anything.
-2. In Supabase **SQL Editor**, run **`sql/migrate_v1_2_google_drive.sql`**. It changes the `reels.source` constraint to allow `google_drive` and creates a private `google_drive_connection` table. **It does not delete existing reels or payments.** The unused legacy OneDrive connection table remains unless you explicitly remove it later.
-3. Copy your V1.1 **`.env.local`** into the new V1.2 folder (this file isn't in either ZIP). **Keep all existing `NEXT_PUBLIC_SUPABASE_*`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_EMAIL` and `CRON_SECRET` values.** Do not create a new Supabase project or admin user.
-4. **Add** the following new variables to your existing `.env.local`:
+## Google Drive sync
 
-   ```env
-   GOOGLE_TOKEN_ENCRYPTION_KEY=YOUR_64_HEX_ENCRYPTION_KEY
-   GOOGLE_CLIENT_ID=YOUR_GOOGLE_WEB_OAUTH_CLIENT_ID
-   GOOGLE_CLIENT_SECRET=YOUR_GOOGLE_WEB_OAUTH_CLIENT_SECRET
-   GOOGLE_REDIRECT_URI=http://localhost:3000/api/gdrive/callback
-   ```
+- OAuth 2.0 with PKCE; scopes are the minimum needed: `drive.metadata.readonly`, `openid`, `email`, `profile`. The app can't read video contents, edit or share files.
+- Refresh token is stored **encrypted (AES-256-GCM)** server-side in Supabase.
+- One record per Drive file ID (unique constraint). New files are inserted; existing ones get a metadata-only update, so sync can never overwrite status, delivery date, notes, links or prices.
+- Imports file name, Drive ID, view link, MIME type, created/modified time and duration (when Drive has processed it; it fills in on a later sync).
+- **Schedule:** every 15 minutes via Vercel Cron (`vercel.json`), plus **Sync now** in admin. A database lock prevents overlapping runs. Each run is recorded in `sync_events` (shown under *Sync history*).
+- Retries Google 429/5xx with backoff; clear messages for expired authorization, missing permissions and wrong folder links.
+- Likely re-uploads (e.g. "Copy of …", "(1)") are flagged in admin before they can be billed twice.
+- **Push notifications (Drive `changes.watch`) are not used.** They need a verified webhook domain and watch the whole Drive, not one folder. The 15-minute poll is metadata-only and cheap. See *Limitations*.
 
-   Generate a new encryption key with `node scripts/generate-secrets.mjs`. **If you prefer to reuse your existing `ONEDRIVE_ENCRYPTION_KEY`**, the server supports that as a fallback; this is optional and does not reconnect OneDrive. Do not paste secret values in chat or screenshots. Old `MICROSOFT_*` environment variables can be removed; the app no longer calls Microsoft Graph.
-5. Run `npm install` and `npm run dev` from the new folder; open <http://localhost:3000>. Your existing Supabase login should still work at `/login`.
+## Privacy
 
-For a **brand-new** Supabase project, run `sql/schema.sql` instead of the migration; do not run both on the same fresh project.
+- All tables have RLS on with **no public policies**. Only the server (service-role key) reads or writes.
+- The public page gets a filtered projection: delivered reels (title, date, duration, amount, Drive link) and payment amounts/dates. **Never sent:** notes, payment method/reference, database or Drive IDs, pending uploads (counts only), tokens, account email, folder ID. A test asserts this (`tests/public-ledger.test.ts`).
+- `robots.txt` and `noindex` keep it out of search engines. **That is not access control:** anyone with the URL can view the ledger. That is the agreed design. If you later want it private, add a client login or secret link.
+- Google Drive files keep their own sharing settings. Share the folder with Mohit's Google account so "Open file" works for him.
 
-## GOOGLE DRIVE API / OAUTH SETUP
+---
 
-1. Open [Google Cloud Console](https://console.cloud.google.com/) and select or create a Google Cloud project dedicated to Crazified Studios.
-2. Go to **APIs & Services → Library**, search for **Google Drive API** and **Enable** it.
-3. Configure **Google Auth Platform → Branding/Audience/Data Access** (formerly OAuth consent screen). For a personal Gmail account, choose **External**. When the consent screen is in **Testing**, add your own Gmail address as a **Test user**.
-4. In **Google Auth Platform → Clients**, click **Create client → Web application**. Name it `CrazifiedEdits Local`.
-5. Set the exact **Authorized redirect URI** to:
+## Setup
 
-   `http://localhost:3000/api/gdrive/callback`
+### 1. Supabase
 
-6. Copy the generated **Client ID** and **Client secret** to `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` inside `.env.local`.
-7. The app requests `https://www.googleapis.com/auth/drive.metadata.readonly`, `openid`, `email`, and `profile`. **It reads file metadata/links only; it cannot edit or share your Drive files.** A restricted/sensitive scope may need additional Google verification for public production use.
-8. Create a folder in Google Drive, upload/edit your video files there. In Google Drive, right-click the folder → **Share → Copy link**.
-9. In CrazifiedEdits `/admin` → **Google Drive → Connect**, authorize your Google account. Paste the folder URL into **Folder to monitor**, click **Save folder** and then **Sync now**. The folder can contain video subfolders.
-10. New files appear as **Needs review** and are **not billed** until Advik confirms duration, selects Delivered/Approved/Revision, and chooses the actual delivery date. Automatically discovered file metadata may not yet contain duration; enter it manually if needed.
+1. Create a project (or keep your existing one; **don't delete its tables**).
+2. In **SQL Editor**:
+   - **New project:** run `sql/schema.sql`, then `sql/migrate_v1_3.sql`.
+   - **Existing V1.1:** run `sql/migrate_v1_2_google_drive.sql`, then `sql/migrate_v1_3.sql`.
+   - **Existing V1.2 / V1.2.1:** run `sql/migrate_v1_3.sql`.
 
-**Google testing-token caveat:** For an External OAuth app whose publishing status is **Testing**, Google refresh tokens containing Drive scopes generally expire in **7 days**; you may need to reconnect until the consent app is appropriately published/verified. This is a Google limitation, not a CrazifiedEdits bug. [Google OAuth documentation](https://developers.google.com/identity/protocols/oauth2).
+   Migrations are additive, transactional and safe to re-run; they never delete rows.
+3. **Authentication → Users → Add user**: create the admin account with email + password. Put that email in `ADMIN_EMAIL`. Disable public sign-ups (Authentication → Sign In / Providers → turn off "Allow new users to sign up"). Only `ADMIN_EMAIL` accounts can use `/admin` either way.
+4. **Project Settings → API**: copy the URL, anon/publishable key and service-role key.
 
-**Client file permissions:** A Google Drive `webViewLink` doesn't automatically give Mohit permission to open the file. Share the folder or specific file with Mohit's Google account (or configure link access intentionally) using Google's normal sharing UI. You can override a reel's client link in admin. Do not make a folder public unless that exposure is acceptable.
+### 2. Google Cloud
 
-## HOW WEEKLY BILLING WORKS
+1. In [Google Cloud Console](https://console.cloud.google.com/), create a project and **enable the Google Drive API**.
+2. **Google Auth Platform**: set up branding and audience (External for a personal Gmail). While in *Testing*, add your Google account as a test user.
+3. **Clients → Create client → Web application**. Authorized redirect URIs (exact match):
+   - `http://localhost:3000/api/gdrive/callback` (local)
+   - `https://YOUR-DOMAIN/api/gdrive/callback` (production)
+4. Copy the Client ID and secret.
 
-- Every Monday–Sunday billing period covering **1 Jan 2026 through 31 Dec 2030** is pre-generated **in the app**, even if that week has **zero reels**. The first visible week is 29 Dec 2025–4 Jan 2026; the last is 30 Dec 2030–5 Jan 2031. Those boundary weeks include the dates requested, and no dates are skipped.
-- Choose a **year** and a **specific week**, or use **Previous**, **Next** and **Current week** buttons. Weekly logs and payment histories stay separate.
-- Each eligible reel earns **₹600**: status Delivered/Approved/Revision, valid delivery date, duration between **1 and 60 seconds** inclusive. New imported draft/cancelled and >60-second files are excluded from billing. No surprise charges on automatic folder scanning.
-- **Total billed = eligible reels × ₹600**, **due = billed − received payments**. Record partial payments in `/admin` against an exact Sunday date; the payment form lists all weekly periods through 2030.
-- Week records are **computed from dated reels/payments, not 260 separate SQL rows**. This means you can browse future empty weeks without needing a SQL calendar seed.
-- Earlier delivered videos (including legacy OneDrive links) remain in the database and in their historical week; Google files sync by unique Google file ID, retaining approvals and delivery dates on re-sync.
-- Large video inventories are processed in batches; the admin list initially renders **80 rows** with a Load More button. Large folders may still need multiple sync runs or smaller subfolders to meet hosting request timeouts.
+> **Testing-mode caveat:** while the consent screen is in *Testing*, Google expires Drive refresh tokens after about 7 days and you'll need to reconnect. Publish the app (In production) to avoid this.
 
-## MOBILE / IPHONE DESIGN
+### 3. Environment variables
 
-- Responsive 2-column KPI cards, single-column content panels, touch-friendly controls.
-- **Mobile video cards** replace the desktop 6-column reel table to avoid sideways scrolling, and long filenames wrap.
-- Billing year + week dropdowns use native pickers on iOS; dates and payment week selectors are optimized for mobile.
-- Form text uses 16px on mobile to avoid Safari auto-zoom; controls have larger touch targets and safe-area padding for iPhone notches/home indicators.
-- CSS supports reduced-motion preferences. Desktop table layout is retained on larger screens.
+Copy `.env.example` to `.env.local` (local) or add each one in Vercel → Settings → Environment Variables. Generate secrets with `node scripts/generate-secrets.mjs`.
 
-**Testing note:** Code syntax and billing rules were checked offline, but the full Next.js production build, live OAuth sync and Safari device testing still require npm dependencies and real accounts. No software can be guaranteed glitch-free on every iPhone without device-level testing. Test on your actual iPhone before production.
+| Variable | Notes |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public by design |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Secret.** Server only, never `NEXT_PUBLIC_` |
+| `ADMIN_EMAIL` | Admin login email; comma-separate several |
+| `CRON_SECRET` | Random, at least 32 chars; Vercel Cron sends it automatically |
+| `GOOGLE_TOKEN_ENCRYPTION_KEY` | 64 hex chars. Changing it means reconnecting Drive |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | From Google Cloud |
+| `GOOGLE_REDIRECT_URI` | Must exactly match one in Google Cloud |
+| `PUBLIC_CLIENT_TOKEN` | Optional; only keeps old `/client/<token>` links redirecting |
 
-## RUNNING / DEPLOYING
+### 4. Run locally
 
-```powershell
-# From the extracted NEW V1.2 project folder
+```bash
 npm install
-npm run dev
+npm run dev          # http://localhost:3000
 ```
 
-- Public dashboard: <http://localhost:3000>
-- Advik login: <http://localhost:3000/login>
-- Admin dashboard: <http://localhost:3000/admin>
-- Design preview (fictional values): open `preview.html` directly.
+Then `/login` → `/admin` → **Connect Google Drive** → paste your reel folder link → **Save folder** → **Sync now**.
 
-For Vercel deployment, use a hosting plan that permits **commercial use** and configure the same environment variables on the server. Register an additional Google OAuth Redirect URI (`https://YOUR-DOMAIN/api/gdrive/callback`) and set `GOOGLE_REDIRECT_URI` in Vercel to match it exactly. Keep `CRON_SECRET` private. `vercel.json` schedules a daily sync at `04:00 UTC` (09:30 IST); automatic scanning is **daily**, not instant. Use Sync now for an immediate scan. Localhost needs manual sync unless you run an external scheduler.
+### 5. Deploy to Vercel
 
-The public homepage has **no client login** by design; anyone who has the site URL can view reel names, links and payment totals. `robots.txt`/noindex is not security. Add a client access gate or secret link before publishing confidential client financial data.
+1. Import the GitHub repo in Vercel (framework: Next.js; defaults are fine).
+2. Use a **Pro** (or Enterprise) plan. Vercel's Hobby plan is for non-commercial use only, and only allows **daily** cron jobs; deploys with the 15-minute schedule in `vercel.json` will fail on Hobby. (Temporarily on Hobby? Change the schedule to `"0 3 * * *"`.)
+3. Add all environment variables for **Production** (and Preview if you use it), with `GOOGLE_REDIRECT_URI=https://YOUR-DOMAIN/api/gdrive/callback`.
+4. Deploy, then add that redirect URI in Google Cloud.
+5. Optional: add a custom domain. The client dashboard URL is the domain root, `https://YOUR-DOMAIN/`.
 
-## TROUBLESHOOTING
+---
 
-- **`TypeError: fetch failed` / Unable to load payments:** Your **Node.js server cannot reach Supabase**. Switching to Google Drive does **not** fix a Supabase network/DNS/TLS problem. Check `.env.local` URL and Supabase service-role key, then run `Test-NetConnection YOUR-PROJECT.supabase.co -Port 443` and a Node.js fetch test. Restart `npm run dev` after changing env values.
-- **`google_drive_connection` missing:** Run `sql/migrate_v1_2_google_drive.sql` on your existing Supabase project.
-- **`redirect_uri_mismatch`:** Copy the exact `GOOGLE_REDIRECT_URI` into Google Cloud OAuth client authorized redirect URIs; localhost port and path must match.
-- **`access_denied`:** Add your Google account as a Test user in OAuth consent settings, or resolve organization restrictions.
-- **`invalid_grant`:** Expired or revoked Google refresh token; reconnect from admin. Check 7-day Testing token caveat.
-- **`403` from Google Drive:** Enable Google Drive API, check scopes and account permission to the folder.
-- **Folder URL refused:** The input must be a **Google Drive folder** URL (`https://drive.google.com/drive/folders/...`) or a bare folder ID, **not** a filename/path or individual file link.
-- **Video link not visible to Mohit:** Google file sharing permissions are independent of the public ledger.
-- **Migrations and database access:** Keep RLS enabled; never expose Supabase service-role key, Google client secret or refresh token in public/browser variables.
+## Verification
 
-## TESTS
-
-```powershell
-npm test
-npm run typecheck
-npm run build
+```bash
+npm run verify       # lint + typecheck + unit tests + production build
 ```
 
-This is a starter billing ledger, not a payment processor or certified accounting system. It records payments manually; it does not collect or verify bank transactions.
+- `tests/billing.test.ts`: ₹600 rule and 60/61 s boundary, confirmed prices, all 262 weeks through 2030 and every day 2026–2030, year-boundary weeks, partial/full/over-payments, totals, midnight-IST Today/Yesterday.
+- `tests/sync-plan.test.ts`: duplicate Drive imports, renames, locked durations, revisions, re-upload detection, admin allow-list.
+- `tests/public-ledger.test.ts`: nothing private reaches the public page.
+- `tests/sql/`: runs every migration against a real Postgres (`cd tests/sql && npm install && npm test`; needs a non-root user).
+- `tests/visual/mock-supabase.mjs`: **test-only** sample-data server for checking layouts locally without touching your database.
 
-**Official references:** [Google Drive files.list](https://developers.google.com/workspace/drive/api/reference/rest/v3/files/list), [Google file metadata](https://developers.google.com/workspace/drive/api/reference/rest/v3/files), [Google OAuth web-server flow](https://developers.google.com/identity/protocols/oauth2/web-server), [Supabase SSR Auth](https://supabase.com/docs/guides/auth/server-side).
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| Homepage says records are unavailable | The server can't reach Supabase. Check the URL/keys in Vercel or `.env.local`; restart. |
+| Admin shows "missing column" / "run sql/migrate_v1_3.sql" | Run the V1.3 migration. |
+| `redirect_uri_mismatch` | `GOOGLE_REDIRECT_URI` must exactly match Google Cloud (scheme, domain, path). |
+| `access_denied` | Add your Google account as a test user, or publish the consent screen. |
+| "authorization expired or was revoked" | Disconnect and reconnect Google Drive (common in Testing mode after 7 days). |
+| "Folder not found" / 403 | The connected Google account must be able to open that folder. |
+| Signed in but sent back to login with "not authorised" | That email isn't in `ADMIN_EMAIL`. |
+| Mohit can't open a video | Share the Drive folder/file with his Google account. |
+
+## Limitations
+
+- Sync is polling (15 min on Pro), not instant push. Use **Sync now** for an immediate check.
+- One sync handles up to about 10,000 videos / 120 sub-folders within Vercel's 60-second function limit.
+- Payments are recorded manually; this is a ledger, not a payment processor or accounting system.

@@ -1,54 +1,32 @@
-CRAZIFIEDEDITS V1.2.1 · BY CRAZIFIED STUDIOS
-GOOGLE DRIVE + WEEKLY LOGS THROUGH 2030 + IPHONE-READY DESIGN
+CRAZIFIEDEDITS V1.3 · BY CRAZIFIED STUDIOS
+Quick start on Windows. README.md has the full guide (Supabase, Google Cloud, Vercel).
 
-YOU ALREADY HAVE A SUPABASE ACCOUNT / SCHEMA:
-
-1. Extract the CrazifiedEdits V1.2.1 ZIP into a NEW folder. Back up your old project.
-   If V1.2 Google Drive is already configured, NO SQL MIGRATION is needed.
-   Copy your previous .env.local and go straight to npm install / npm run dev.
-2. In your existing Supabase project: SQL Editor -> New query -> paste
-   sql/migrate_v1_2_google_drive.sql -> Run.
-   Do NOT re-run sql/schema.sql or delete existing records.
-3. Copy the old .env.local file into the new project folder. Keep your
-   Supabase URL, API keys, ADMIN_EMAIL and existing secrets unchanged.
-4. Open Google Cloud Console (console.cloud.google.com):
-   - Enable Google Drive API.
-   - Configure the Google Auth Platform consent screen.
-   - Add your Gmail account as a Test user if status is Testing.
-   - Create an OAuth client of type Web application.
-   - Add redirect URI EXACTLY:
-     http://localhost:3000/api/gdrive/callback
-   - Copy the Google Client ID and Secret (DO NOT share them).
-5. In .env.local ADD:
-     GOOGLE_CLIENT_ID=<real-google-client-id>
-     GOOGLE_CLIENT_SECRET=<real-google-client-secret>
-     GOOGLE_REDIRECT_URI=http://localhost:3000/api/gdrive/callback
-     GOOGLE_TOKEN_ENCRYPTION_KEY=<64 hex chars>
-   Generate the encryption key via: node scripts/generate-secrets.mjs
-   If you already have ONEDRIVE_ENCRYPTION_KEY, V1.2 can reuse it as a fallback.
-   Old MICROSOFT_* settings are no longer used.
-6. Open PowerShell IN the new V1.2 folder:
+UPGRADING FROM V1.2 / V1.2.1 (your Supabase data is kept):
+1. Pull the latest code from GitHub (or extract the new ZIP into a NEW folder).
+2. Supabase -> SQL Editor -> New query -> paste sql/migrate_v1_3.sql -> Run.
+   It only ADDS columns/tables; it never deletes reels or payments. Safe to re-run.
+   Do NOT re-run sql/schema.sql.
+   (Still on V1.1? Run sql/migrate_v1_2_google_drive.sql first, then migrate_v1_3.sql.)
+3. Copy your existing .env.local into the project folder. No new variables are required.
+4. In PowerShell, inside the project folder:
      npm install
      npm run dev
-7. Open http://localhost:3000 - public client dashboard first.
-8. Admin sign in at http://localhost:3000/login using your EXISTING
-   Supabase email/password.
-9. In admin, connect GOOGLE DRIVE. Copy your Google Drive FOLDER link
-   (not a filename), paste under Folder to monitor, SAVE, click SYNC NOW.
-10. Mark each synced reel Delivered after verifying its duration/date.
-    Select week/year in the public dashboard. Every Monday-Sunday period
-    through the end of 2030 exists even if no reels were logged that week.
-11. On iPhone, open the hosted site. Use native Year/Week menus and
-    mobile reel cards. The localhost URL only works on your PC unless
-    you configure access to your local network.
+5. Open http://localhost:3000 (client dashboard) and http://localhost:3000/login (admin).
 
-NOTES:
-- Preview: double-click preview.html for a fake-data design demo.
-- Old OneDrive reel history is preserved, but Microsoft sync is removed.
-- Google Drive does not automatically share files with Mohit.
-- Google OAuth in External Testing can require reconnection after 7 days.
-- Existing Supabase 'fetch failed' errors must be fixed independently.
-- A commercial Vercel deployment requires a commercially permitted plan.
-- Do NOT share keys or .env.local or publish credentials to GitHub.
+NEW SETUP:
+1. Supabase: run sql/schema.sql, then sql/migrate_v1_3.sql. Create the admin user under
+   Authentication -> Users.
+2. Copy .env.example to .env.local and fill it in. Generate secrets with:
+     node scripts/generate-secrets.mjs
+3. Google Cloud: enable the Google Drive API, create a Web application OAuth client with
+   redirect URI http://localhost:3000/api/gdrive/callback (exactly).
+4. npm install, npm run dev, sign in at /login, Connect Google Drive, paste the folder link,
+   Save folder, Sync now.
 
-Full details, troubleshooting and production notes are in README.md.
+DAILY USE:
+- New Drive uploads appear in admin as PENDING REVIEW and are not billed.
+- Tap "Mark delivered today" when a reel is delivered. Up to 60 s = Rs 600.
+- Over 60 s shows "Pricing review required": enter a Confirmed price in Edit to bill it.
+- Record payments against their Monday-Sunday week; partial payments are fine.
+
+CHECK EVERYTHING:  npm run verify   (lint, types, tests, production build)

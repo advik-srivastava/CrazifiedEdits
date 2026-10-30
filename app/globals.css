@@ -146,3 +146,127 @@
 .crazified-brand small{margin-left:2px;font-size:7px;letter-spacing:.15em;line-height:1.1;white-space:nowrap}
 @media(max-width:760px){.crazified-brand{width:145px}.crazified-brand .product-brand-name{font-size:12px}.crazified-brand small{font-size:6px;letter-spacing:.12em}}
 @media(max-width:375px){.crazified-brand{width:130px}.crazified-brand .product-brand-name{font-size:11px}.crazified-brand small{font-size:5.5px}}
+
+/* ===================== V1.3 additions ===================== */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.skip-link{position:absolute;left:12px;top:-60px;z-index:100;background:#131329;color:#fff;padding:12px 16px;border-radius:10px;font-weight:750}
+.skip-link:focus{top:12px}
+:where(a,button,select,input,textarea,summary):focus-visible{outline:3px solid #8b80ff;outline-offset:2px;border-radius:8px}
+.ledger-anchor{scroll-margin-top:96px;outline:none}
+ul.mobile-delivery-list,ul.payments-list,.activity-list,.sync-log ul{list-style:none;margin:0;padding:0}
+.summary-header .summary-title{font-size:29px;margin-bottom:7px}
+.week-range-announce{margin:-6px 0 16px;font-size:12px;color:#7d8495;font-weight:650}
+.week-status{display:inline-block;padding:2px 9px;border-radius:99px;font-weight:800;font-size:11px}
+.week-status-paid{background:#e9f8f2;color:#07865c}.week-status-partial{background:#fff4dd;color:#a86f12}
+.week-status-unpaid{background:#fff0f0;color:#bf4545}.week-status-no_charges{background:#f1f2f6;color:#737a8b}
+.fee-note{font-size:10px;font-weight:700;color:#8a92a2;margin-left:3px}
+
+/* All-time totals */
+.totals-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:0 0 18px}
+.total-card{background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;box-shadow:0 3px 18px #17215304;min-width:0}
+.total-card strong{display:block;font-family:Manrope,sans-serif;font-size:26px;font-weight:800;letter-spacing:-.05em;margin:10px 0 4px;overflow-wrap:anywhere}
+.total-card small{color:#9198a8;font-size:11px}
+.total-label{display:flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:#6c7385}
+.total-label svg{color:var(--primary)}
+.total-featured{background:linear-gradient(135deg,#211c49,#3a2f8f);border-color:#2d2668;color:#fff}
+.total-featured .total-label,.total-featured small{color:#cfc9ff}.total-featured .total-label svg{color:#fff}
+.total-featured.has-due strong{color:#ffd88a}
+
+/* Today & Yesterday */
+.activity-card{padding:22px 24px;margin-bottom:20px}
+.activity-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.activity-head h2{margin:0}
+.sync-chip{display:inline-flex;align-items:center;gap:7px;padding:8px 12px;border-radius:99px;font-size:12px;font-weight:700;line-height:1.3}
+.sync-chip-ok{background:#e9f8f2;color:#07865c}.sync-chip-warn{background:#fff4dd;color:#a86f12}.sync-chip-idle{background:#f1f2f6;color:#737a8b}
+.activity-tabs{display:inline-flex;gap:6px;background:#f3f4f8;border-radius:13px;padding:5px;margin-bottom:16px;max-width:100%}
+.activity-tab{min-height:44px;min-width:120px;border:0;background:transparent;border-radius:10px;padding:7px 16px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;color:#6c7385;font-weight:800;font-size:13px;transition:background .15s,color .15s}
+.activity-tab small{font-weight:600;font-size:11px;color:#9aa0ae}
+.activity-tab.active{background:#fff;color:var(--ink);box-shadow:0 2px 8px #1721531a}
+.activity-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.activity-metric{border:1px solid var(--border);border-radius:14px;padding:14px 16px;display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto;column-gap:10px;align-items:center;min-width:0}
+.activity-metric svg{grid-row:span 2;color:var(--primary);background:#f1efff;border-radius:10px;padding:8px;width:36px;height:36px}
+.activity-metric strong{font-family:Manrope,sans-serif;font-size:22px;font-weight:800;letter-spacing:-.04em;overflow-wrap:anywhere}
+.activity-metric span{font-size:11px;font-weight:700;color:#8a92a2}
+.activity-metric-money svg{color:#07865c;background:#e9f8f2}
+.activity-footnote{font-size:11px;color:#9aa0ae;margin:10px 0 6px}
+.activity-list li{display:flex;align-items:center;gap:12px;border-top:1px solid #f0f1f5;padding:12px 2px}
+.activity-reel-title{flex:1;min-width:0;display:flex;flex-direction:column}
+.activity-reel-title strong{overflow-wrap:anywhere;font-size:13px}
+.activity-reel-title small{color:#9aa0ae;font-size:11px}
+.activity-reel-fee{font-weight:800;white-space:nowrap}
+.activity-empty{margin:8px 0 0;padding:14px;border-radius:12px;background:#f8f8fb;color:#7d8495;font-size:13px}
+
+/* Admin: review flags, quick actions, sync log, payments */
+.reel-flags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.reel-flag{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 8px;border-radius:7px;max-width:100%;overflow-wrap:anywhere}
+.flag-warn{background:#fff4dd;color:#a86f12}.flag-muted{background:#f1f2f6;color:#6c7385}
+.reel-pending>summary{background:linear-gradient(90deg,#fffaf0,transparent 60%)}
+.quick-actions{display:flex;flex-wrap:wrap;gap:10px;padding-bottom:14px;margin-bottom:14px;border-bottom:1px dashed var(--border)}
+.sync-log{margin-top:14px;border-top:1px solid var(--border);padding-top:10px}
+.sync-log summary{cursor:pointer;display:flex;align-items:center;gap:7px;font-weight:750;font-size:12px;color:#5c6376;min-height:44px}
+.sync-log li{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:9px 0;border-top:1px solid #f3f4f7;font-size:12px}
+.sync-log-when{color:#5c6376;font-weight:700}.sync-log-counts{color:#8a92a2}
+.sync-log-error{flex-basis:100%;color:#bf4545;font-size:11px}
+.admin-payment-item{border-top:1px solid #f0f1f5}
+.admin-payment-item>summary{list-style:none;cursor:pointer}
+.admin-payment-item>summary::-webkit-details-marker{display:none}
+.admin-payment-item .admin-payment-row{border:0}
+.admin-payment-item .edit-pane{padding:4px 0 14px}
+.payment-delete{margin-top:8px;display:flex;justify-content:flex-end}
+.load-more-payments{margin-top:12px;width:100%}
+.offline-banner{position:sticky;top:0;z-index:45;display:flex;align-items:center;justify-content:center;gap:8px;background:#2b2440;color:#fff;font-size:12px;font-weight:700;padding:10px 16px;text-align:center}
+
+@media(max-width:1080px){.totals-grid,.activity-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){
+  /* Touch targets: at least 44 × 44 px on phones. */
+  .button,.week-step,.week-current,.header-admin-link,.file-link,.text-button,.logout-btn,.show-password{min-height:44px}
+  .logout-btn,.text-button{min-width:44px}
+  .show-password{top:2px;height:44px;width:44px}
+  .year-selector select,.week-selector select,.tools-bar select,.tools-bar input,.field input,.field select,.field textarea,.folder-form input{min-height:44px;font-size:16px}
+  .file-link{padding:0 4px}
+  .reel-item>summary{min-height:56px}
+  .totals-grid{gap:10px}
+  .total-card{padding:14px}
+  .total-card strong{font-size:21px}
+  .activity-card{padding:18px 16px}
+  .activity-tabs{display:flex;width:100%}
+  .activity-tab{flex:1;min-width:0}
+  .activity-metrics{gap:8px}
+  .activity-metric{padding:12px;grid-template-columns:1fr;grid-template-rows:auto}
+  .activity-metric svg{grid-row:auto;width:32px;height:32px;margin-bottom:6px}
+  .activity-metric strong{font-size:19px}
+  .activity-list li{flex-wrap:wrap}
+  .activity-list li .file-link{margin-left:auto}
+  .summary-header .summary-title{font-size:23px}
+  .quick-actions form{flex:1 1 160px}
+  .quick-actions .button{width:100%}
+}
+@media(max-width:470px){.header-admin-text{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}.header-admin-link{min-width:44px}}
+@media(max-width:375px){.total-card strong{font-size:19px}.activity-metric strong{font-size:17px}}
+@media(prefers-reduced-motion:reduce){.activity-tab{transition:none}}
+.skip-link{min-height:44px;display:inline-flex;align-items:center}
+@media(max-width:760px){
+  .mobile-reel-action .file-link{min-height:44px}
+  .login-return{min-height:44px;padding:0 2px;border-bottom:0;text-decoration:underline;text-underline-offset:4px}
+  .login-copyright a{display:inline-flex;align-items:center;min-height:44px;padding:0 4px}
+}
+/* Phones: show fewer chart weeks so each bar is a comfortable tap target; the week stepper covers the rest. */
+@media(max-width:470px){.bar-chart .bar-column:nth-last-child(n+7){display:none}}
+@media(max-width:350px){.bar-chart .bar-column:nth-last-child(n+6){display:none}}
+@media(max-width:760px){.public-bottom-strip a{display:inline-flex;align-items:center;min-height:44px;padding:0 4px}.client-link-controls input{min-height:44px}}
+/* Phones: compact hero so totals and today's activity are visible without scrolling. */
+@media(max-width:760px){
+  .public-hero{min-height:0;gap:14px;padding:18px 16px;margin-bottom:16px}
+  .public-hero h1{font-size:24px;margin:12px 0 0;line-height:1.15}
+  .public-hero h1 br{display:none}
+  .public-hero h1 span{margin:0 .2em}
+  .public-hero-copy>p,.public-hero-chips,.identity-platforms,.identity-divider{display:none}
+  .client-identity{padding:12px 14px;display:grid;grid-template-columns:1fr auto;align-items:center;gap:6px 12px}
+  .client-identity-label{grid-column:1/-1;margin:0}
+  .client-identity-main{margin:0;gap:10px}
+  .client-identity .mohit-avatar{width:44px;height:44px}
+  .client-name{font-size:17px}
+  .identity-editor{margin:0;text-align:right}
+  .identity-editor span{display:block}
+}
+@media(max-width:375px){.client-identity{grid-template-columns:1fr}.identity-editor{text-align:left}}

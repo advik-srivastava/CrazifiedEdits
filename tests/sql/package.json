@@ -1,0 +1,7 @@
+{
+  "name": "crazifiededits-sql-tests",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node migrations.mjs" },
+  "dependencies": { "embedded-postgres": "18.4.0-beta.17", "pg": "^8.23.1" }
+}

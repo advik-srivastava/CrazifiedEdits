@@ -17,7 +17,7 @@ export function SectionHeading({eyebrow,title,description,action}:{eyebrow?:stri
   return <div className="section-head"><div>{eyebrow&&<div className="eyebrow">{eyebrow}</div>}<h2>{title}</h2>{description&&<p>{description}</p>}</div>{action}</div>;
 }
 export const statusView:Record<string,{name:string,tone:"neutral"|"green"|"orange"|"blue"|"red"}>={
-  discovered:{name:"Needs review",tone:"orange"},delivered:{name:"Delivered",tone:"blue"},revision:{name:"Revision",tone:"orange"},approved:{name:"Approved",tone:"green"},cancelled:{name:"Cancelled",tone:"neutral"}
+  discovered:{name:"Pending review",tone:"orange"},delivered:{name:"Delivered",tone:"blue"},revision:{name:"Revision",tone:"orange"},approved:{name:"Approved",tone:"green"},cancelled:{name:"Cancelled",tone:"neutral"}
 };
 export function Status({status}:{status:string}){const s=statusView[status]||statusView.discovered;return <Pill tone={s.tone}><span className="dot"/>{s.name}</Pill>}
 export function Empty({title,description,icon}:{title:string;description:string;icon?:ReactNode}){return <div className="empty-state"><div className="empty-icon">{icon||<Layers3 size={26}/>}</div><h3>{title}</h3><p>{description}</p></div>}
