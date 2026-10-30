@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { after } from "next/server";
 import { syncIfStale } from "@/lib/google-drive";
-import { LogOut, ShieldCheck, Sparkles, Video, Eye, AlertCircle } from "lucide-react";
+import { LogOut, ShieldCheck, Video, Eye, AlertCircle } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
 import { getConnection, getDashboard, getSettings, getSyncEvents } from "@/lib/data";
 import { isConfigured } from "@/lib/supabase";
@@ -10,6 +10,7 @@ import { Header, OverviewTotals, Pill } from "@/components/ui";
 import { WeekLedger, UnpricedReels } from "@/components/week-ledger";
 import { ActivityPanel } from "@/components/activity";
 import { AutoRefresh, OfflineBanner } from "@/components/live";
+import { Toast } from "@/components/toast";
 import { AddReelForm, AdminReelList, ClientLink, GoogleDrivePanel, PaymentEntry } from "@/components/admin-panels";
 import { adminLedgerReel } from "@/lib/public-ledger";
 import { todayInIndia } from "@/lib/billing";
@@ -47,8 +48,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     <OfflineBanner />
     <AutoRefresh intervalMs={90_000} />
     <main className="app-main"><div className="workspace-kicker"><span><span className="live-dot" />CRAZIFIEDEDITS · CRAZIFIED STUDIOS</span><span>Signed in as {user.email}</span></div>
-      {params.success && <div className="toast-message success-message" role="status"><Sparkles size={18} aria-hidden />{params.success}</div>}
-      {params.error && <div className="toast-message error-message" role="alert">{params.error}</div>}
+      <Toast key={`${params.success}|${params.error}`} success={params.success} error={params.error} />
       <OverviewTotals totals={dashboard.totals} />
       <ActivityPanel daily={dashboard.daily} sync={sync} />
       <UnpricedReels reels={dashboard.reels.filter(r => r.delivery_date).map(adminLedgerReel)} />

@@ -270,3 +270,12 @@ ul.mobile-delivery-list,ul.payments-list,.activity-list,.sync-log ul{list-style:
   .identity-editor span{display:block}
 }
 @media(max-width:375px){.client-identity{grid-template-columns:1fr}.identity-editor{text-align:left}}
+/* Floating result message: always visible after a redirect to #gdrive / #reels / #payments. */
+.toast-float{position:fixed;z-index:60;left:50%;transform:translateX(-50%);bottom:max(18px,calc(env(safe-area-inset-bottom) + 12px));width:min(560px,calc(100vw - 32px));display:flex;align-items:flex-start;gap:10px;padding:14px 10px 14px 16px;border-radius:14px;font-size:13px;font-weight:700;line-height:1.45;box-shadow:0 14px 40px #10101833;animation:toast-in .25s ease-out}
+.toast-float>svg{flex-shrink:0;margin-top:1px}
+.toast-float>span{flex:1;min-width:0;overflow-wrap:anywhere}
+.toast-close{flex-shrink:0;border:0;background:transparent;color:inherit;opacity:.75;width:44px;height:44px;margin:-12px -4px -12px 0;border-radius:10px;display:grid;place-items:center}
+.toast-close:hover{opacity:1;background:#0000000d}
+@keyframes toast-in{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+@media(prefers-reduced-motion:reduce){.toast-float{animation:none}}
+#gdrive,#reels,#payments,#add{scroll-margin-top:96px}
