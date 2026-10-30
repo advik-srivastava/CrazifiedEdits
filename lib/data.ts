@@ -4,6 +4,7 @@ import type { Connection, Payment, PublicSyncStatus, Reel, Settings, SyncEvent }
 import { adminLedgerReel, publicLedgerReel, publicReels, publicPayments } from "./public-ledger";
 import { buildLedger, ledgerTotals, todayAndYesterday, todayInIndia } from "./billing";
 import { unstable_noStore as noStore } from "next/cache";
+import { getPublicClaims } from "./claims-server";
 
 export async function getReels(): Promise<Reel[]> {
   noStore();
@@ -54,17 +55,17 @@ function syncStatus(settings: Settings | null): PublicSyncStatus {
 }
 
 export async function getDashboard() {
-  const [reels, payments] = await Promise.all([getReels(), getPayments()]);
+  const [reels, payments, claims] = await Promise.all([getReels(), getPayments(), getPublicClaims()]);
   const ledgerReels = reels.filter(r => r.delivery_date).map(adminLedgerReel);
-  const weeks = buildLedger(ledgerReels, payments, todayInIndia());
+  const weeks = buildLedger(ledgerReels, payments, todayInIndia(), claims);
   return { reels, payments, weeks, totals: ledgerTotals(weeks), daily: todayAndYesterday(reels, adminLedgerReel) };
 }
 
 /** Public, read-only projection: never serialize admin notes, internal IDs, tokens, payment references or connection settings. */
 export async function getPublicDashboard() {
-  const [reels, payments, settings] = await Promise.all([getReels(), getPayments(), getSettings().catch(() => null)]);
+  const [reels, payments, settings, claims] = await Promise.all([getReels(), getPayments(), getSettings().catch(() => null), getPublicClaims()]);
   const sharedReels = publicReels(reels);
-  const weeks = buildLedger(sharedReels, publicPayments(payments), todayInIndia());
+  const weeks = buildLedger(sharedReels, publicPayments(payments), todayInIndia(), claims);
   const daily = todayAndYesterday(reels, publicLedgerReel);
   return { reels: sharedReels, weeks, totals: ledgerTotals(weeks), daily, sync: syncStatus(settings) };
 }

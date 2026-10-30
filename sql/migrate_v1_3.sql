@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS public.sync_events (
 );
 -- 'auto' = background sync started by a dashboard visit when the last sync is over 15 minutes old.
 ALTER TABLE public.sync_events DROP CONSTRAINT IF EXISTS sync_events_trigger_check;
-ALTER TABLE public.sync_events ADD CONSTRAINT sync_events_trigger_check CHECK (trigger IN ('manual','cron','auto'));
+ALTER TABLE public.sync_events ADD CONSTRAINT sync_events_trigger_check CHECK (trigger IN ('manual','cron','auto','webhook'));
 CREATE INDEX IF NOT EXISTS sync_events_started ON public.sync_events (started_at DESC);
 
 -- ---------------------------------------------------------------- security

@@ -1,12 +1,12 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { AlertCircle, ArrowUpRight, CheckCircle2, Cloud, ExternalLink, FileVideo, FolderOpen, Link2, PlusCircle, RefreshCcw, Settings2, Shield, X, Clock3, PackageCheck, Copy, CloudOff, History, Pencil } from "lucide-react";
+import { AlertCircle, ArrowUpRight, CheckCircle2, Cloud, ExternalLink, FileVideo, FolderOpen, Link2, PlusCircle, RefreshCcw, Settings2, Shield, X, Clock3, PackageCheck, Copy, CloudOff, History, Pencil, Zap, Wand2 } from "lucide-react";
 import type { Connection, Payment, Reel, Settings, SyncEvent } from "@/lib/models";
 import { billingCalendar, durationLabel, formatINR, prettyDate, prettyDateTime, pricingState, reelFee, sundayFor, todayInIndia, uploadDateOf, withinStandardLength } from "@/lib/billing";
 import { possibleDuplicates } from "@/lib/sync-plan";
 import { paymentMethods } from "@/lib/validation";
-import { addManualReel, disconnectGoogleDrive, markDelivered, removePayment, removeReel, saveFolder, savePayment, saveReel, syncNow, updatePayment } from "@/app/admin/actions";
+import { addManualReel, disconnectGoogleDrive, markDelivered, reconnectNotifications, removePayment, removeReel, saveAutomation, saveFolder, savePayment, saveReel, syncNow, updatePayment } from "@/app/admin/actions";
 import { Empty, Pill, SectionHeading, Status } from "./ui";
 
 export function SubmitButton({ children, variant = "primary", pendingLabel = "Saving…" }: { children: React.ReactNode, variant?: "primary" | "secondary" | "subtle", pendingLabel?: string }) {
@@ -21,15 +21,24 @@ function confirmSubmit(message: string) {
   return (e: React.FormEvent<HTMLFormElement>) => { if (!confirm(message)) e.preventDefault(); };
 }
 const eventTone = { success: "green", error: "red", skipped: "neutral", running: "blue" } as const;
+const triggerLabel = { cron: "daily schedule", auto: "dashboard visit", webhook: "instant (Drive change)", manual: "manual" } as const;
+export type InstantSync = "on" | "unavailable" | "off";
 
-export function GoogleDrivePanel({ settings, connection, events, syncInProgress }: { settings: Settings; connection: Connection | null; events: SyncEvent[]; syncInProgress: boolean }) {
+export function GoogleDrivePanel({ settings, connection, events, syncInProgress, instant }: { settings: Settings; connection: Connection | null; events: SyncEvent[]; syncInProgress: boolean; instant: InstantSync }) {
   return <section className="surface one-drive-card" id="gdrive"><div className="section-top"><SectionHeading eyebrow="CONNECTED STORAGE" title="Google Drive" description="New videos appear automatically as Pending review; nothing is billed until you mark it delivered" /><Pill tone={connection ? "green" : "orange"}>{connection ? "Connected" : "Not connected"}</Pill></div>
     <div className="connect-profile"><span className="drive-icon"><Cloud size={26} aria-hidden /></span><div><strong>{connection?.account_name || "Your Google account"}</strong><small>{connection ? `${connection.account_email || "Connected"} · since ${prettyDateTime(connection.connected_at)}` : "Sign in once to allow read-only syncing"}</small></div>{!connection && <a className="button primary" href="/api/gdrive/connect"><Link2 size={16} aria-hidden />Connect Google Drive</a>}</div>
     <form action={saveFolder} className="folder-form"><label htmlFor="folder">Folder to monitor</label><div className="input-action"><span className="input-prefix"><FolderOpen size={17} aria-hidden /></span><input id="folder" name="folder_path" defaultValue={settings.folder_path} placeholder="https://drive.google.com/drive/folders/..." required aria-describedby="folder-hint" /><SubmitButton variant="secondary">Save folder</SubmitButton></div><small id="folder-hint" className="form-hint">In Google Drive, right-click your reel folder → Share → Copy link, and paste it here. Sub-folders are included.</small></form>
     <div className="sync-footer"><div className="sync-meta"><Clock3 size={15} aria-hidden />{settings.last_sync_at ? `Last synced ${prettyDateTime(settings.last_sync_at)} • ${settings.last_sync_count || 0} videos scanned` : "No sync performed yet"}{syncInProgress && " • sync in progress"}</div><div className="button-row">{connection && <><form action={disconnectGoogleDrive} onSubmit={confirmSubmit("Disconnect Google Drive? Previously logged reels will remain.")}><SubmitButton variant="subtle">Disconnect</SubmitButton></form><form action={syncNow}><SyncButton /></form></>}</div></div>
     {settings.last_sync_error && <div className="small-alert" role="alert"><AlertCircle size={15} aria-hidden />{settings.last_sync_error}</div>}
-    <p className="drive-note"><Shield size={15} aria-hidden />Read-only access. Syncs automatically when the dashboard is opened and the last sync is over 15 minutes old, plus once a day. Use Sync now for an immediate check.</p>
-    {events.length > 0 && <details className="sync-log"><summary><History size={15} aria-hidden /> Sync history ({events.length} most recent)</summary><ul>{events.map(e => <li key={e.id}><Pill tone={eventTone[e.status]}>{e.status}</Pill><span className="sync-log-when">{prettyDateTime(e.started_at)} · {e.trigger === "cron" ? "daily schedule" : e.trigger === "auto" ? "automatic" : "manual"}</span><span className="sync-log-counts">{e.status === "skipped" ? "Another sync was running" : `${e.imported} new · ${e.updated} refreshed · ${e.missing} removed · ${e.scanned} scanned`}</span>{e.error && e.status === "error" && <span className="sync-log-error">{e.error}</span>}</li>)}</ul></details>}
+    {connection && <div className={`instant-status instant-${instant}`}><Zap size={15} aria-hidden /><span>{instant === "on" ? "Instant sync on: new uploads and deletions in Drive appear within about 30 seconds." : instant === "off" ? "Instant sync isn't active yet. It switches on after the next successful sync." : "Instant sync needs the live https:// site address (it's off on localhost). The dashboard still syncs on visits and daily."}</span>{instant === "off" && <form action={reconnectNotifications}><SubmitButton variant="subtle" pendingLabel="Turning on…">Turn on now</SubmitButton></form>}</div>}
+    <form action={saveAutomation} className="automation-form">
+      <div className="eyebrow"><Wand2 size={13} aria-hidden /> AUTOMATION</div>
+      <label className="switch-row"><input type="checkbox" name="auto_deliver" defaultChecked={settings.auto_deliver !== false} /><span><strong>Auto-deliver new uploads</strong><small>Each new video is marked delivered on its upload date and billed (₹600 up to 60 s; longer ones still need a confirmed price). Possible re-uploads stay in Pending review. Only uploads from when this is switched on.</small></span></label>
+      <label className="switch-row"><input type="checkbox" name="auto_remove" defaultChecked={settings.auto_remove !== false} /><span><strong>Remove deleted files from the log</strong><small>If a video is deleted, trashed or moved out of the folder, it&apos;s taken off the delivery log and its charge is removed from that week. Payments already received are kept. If the file comes back, the reel is restored.</small></span></label>
+      <div className="align-end"><SubmitButton variant="secondary">Save automation</SubmitButton></div>
+    </form>
+    <p className="drive-note"><Shield size={15} aria-hidden />Read-only Drive access. Also syncs when the dashboard is opened (if the last sync is over 15 minutes old) and once a day. Use Sync now for an immediate check.</p>
+    {events.length > 0 && <details className="sync-log"><summary><History size={15} aria-hidden /> Sync history ({events.length} most recent)</summary><ul>{events.map(e => <li key={e.id}><Pill tone={eventTone[e.status]}>{e.status}</Pill><span className="sync-log-when">{prettyDateTime(e.started_at)} · {triggerLabel[e.trigger] ?? e.trigger}</span><span className="sync-log-counts">{e.status === "skipped" ? "Another sync was running" : `${e.imported} new${e.delivered ? ` (${e.delivered} auto-delivered)` : ""} · ${e.removed ? `${e.removed} removed · ` : ""}${e.missing} missing · ${e.scanned} scanned`}</span>{e.error && e.status !== "skipped" && <span className="sync-log-error">{e.error}</span>}</li>)}</ul></details>}
   </section>;
 }
 export function AddReelForm() {
@@ -47,7 +56,9 @@ function ReelFlags({ reel, duplicateOf }: { reel: Reel; duplicateOf?: Reel }) {
   const flags: React.ReactNode[] = [];
   if (duplicateOf) flags.push(<span key="dup" className="reel-flag flag-warn"><Copy size={13} aria-hidden />Possible re-upload of “{duplicateOf.title}”</span>);
   if (pricingState(reel) === "review") flags.push(<span key="price" className="reel-flag flag-warn"><AlertCircle size={13} aria-hidden />Pricing review required</span>);
-  if (reel.drive_missing_at) flags.push(<span key="gone" className="reel-flag flag-muted"><CloudOff size={13} aria-hidden />No longer in Drive folder</span>);
+  if (reel.removed_by_sync) flags.push(<span key="gone" className="reel-flag flag-muted"><CloudOff size={13} aria-hidden />Removed: deleted from Drive{reel.status_before_removal ? ` (was ${reel.status_before_removal === "discovered" ? "pending" : reel.status_before_removal})` : ""}</span>);
+  else if (reel.drive_missing_at) flags.push(<span key="gone" className="reel-flag flag-muted"><CloudOff size={13} aria-hidden />No longer in Drive folder</span>);
+  if (reel.auto_delivered && reel.status !== "cancelled") flags.push(<span key="auto" className="reel-flag flag-info"><Zap size={13} aria-hidden />Auto-delivered</span>);
   if ((reel.revision_count || 0) > 0 && reel.status !== "discovered") flags.push(<span key="rev" className="reel-flag flag-muted"><History size={13} aria-hidden />File changed in Drive after review ({reel.revision_count}×)</span>);
   return flags.length ? <span className="reel-flags">{flags}</span> : null;
 }

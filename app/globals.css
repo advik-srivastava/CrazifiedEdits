@@ -279,3 +279,76 @@ ul.mobile-delivery-list,ul.payments-list,.activity-list,.sync-log ul{list-style:
 @keyframes toast-in{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
 @media(prefers-reduced-motion:reduce){.toast-float{animation:none}}
 #gdrive,#reels,#payments,#add{scroll-margin-top:96px}
+/* V1.4: automation + instant sync */
+.instant-status{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:14px;padding:11px 14px;border-radius:12px;font-size:12px;font-weight:700;line-height:1.45}
+.instant-status>span{flex:1 1 220px}
+.instant-on{background:#e9f8f2;color:#07865c}.instant-off{background:#fff4dd;color:#a86f12}.instant-unavailable{background:#f1f2f6;color:#6c7385}
+.automation-form{margin-top:16px;padding-top:14px;border-top:1px solid var(--border);display:grid;gap:10px}
+.automation-form .eyebrow{display:flex;align-items:center;gap:6px;margin:0}
+.switch-row{display:flex;gap:12px;align-items:flex-start;padding:12px;border:1px solid var(--border);border-radius:12px;cursor:pointer;min-height:44px}
+.switch-row input{appearance:none;flex-shrink:0;width:44px;height:26px;border-radius:99px;background:#d9dbe3;position:relative;cursor:pointer;transition:background .15s;margin:0}
+.switch-row input::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0003;transition:transform .15s}
+.switch-row input:checked{background:var(--primary)}
+.switch-row input:checked::after{transform:translateX(18px)}
+.switch-row span{display:flex;flex-direction:column;gap:3px}
+.switch-row strong{font-size:13px}
+.switch-row small{color:#7d8495;font-size:12px;line-height:1.5}
+.flag-info{background:#efedff;color:#5a4fe1}
+@media(prefers-reduced-motion:reduce){.switch-row input,.switch-row input::after{transition:none}}
+/* V1.4: client payment reports */
+.report-card{padding:20px 22px;margin-bottom:20px}
+.report-intro{display:flex;gap:14px;align-items:flex-start;margin-bottom:14px}
+.report-intro h2{margin:0 0 4px}.report-intro p{margin:0;color:#6c7385;font-size:13px}
+.report-icon{flex-shrink:0;width:44px;height:44px;border-radius:12px;background:#efedff;color:var(--primary);display:grid;place-items:center}
+.report-open{width:100%}
+.report-sub{font-size:12px;color:#8a92a2;margin:0}
+.report-done{display:flex;flex-wrap:wrap;align-items:center;gap:14px;color:#07865c}
+.report-done>div{flex:1 1 240px;color:var(--ink)}.report-done h2{margin:0 0 4px}.report-done p{margin:0;color:#6c7385;font-size:13px}
+.field-label{display:block;font-size:12px;font-weight:750;margin-bottom:7px;color:#3d4254}
+.shot-drop{display:flex;align-items:center;gap:12px;min-height:64px;padding:14px;border:1.5px dashed #c9c4f5;border-radius:12px;background:#faf9ff;color:var(--primary);cursor:pointer}
+.shot-drop span{display:flex;flex-direction:column}.shot-drop small{color:#8a92a2}
+.shot-drop:focus-within,.shot-drop:hover{border-color:var(--primary)}
+.shot-preview{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.shot-preview img{width:88px;height:120px;object-fit:cover;border-radius:10px;border:1px solid var(--border)}
+.hp-field{position:absolute;left:-10000px;width:1px;height:1px;opacity:0}
+.week-status-reported{background:#efedff;color:#5a4fe1;margin-left:6px}
+.reported-row .payment-icon{background:#efedff;color:#5a4fe1}
+.reported-rejected .payment-icon{background:#f1f2f6;color:#8a92a2}
+.reported-amount{color:#6c63c9;white-space:nowrap}
+.reported-rejected .reported-amount{color:#9aa0ae;text-decoration:line-through}
+.claims-banner{display:flex;align-items:center;gap:8px;margin-bottom:16px;padding:13px 16px;border-radius:13px;background:#efedff;color:#4b3fd4;font-weight:800;font-size:13px;min-height:44px}
+.claims-panel{padding:22px 24px;margin-bottom:20px;scroll-margin-top:96px}
+.claims-list{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:12px}
+.claim-item{display:flex;gap:16px;padding:14px;border:1px solid var(--border);border-radius:14px}
+.claim-shot{flex-shrink:0}
+.shot-thumb{position:relative;display:block;width:96px;height:132px;padding:0;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:#f3f4f8}
+.shot-thumb img{width:100%;height:100%;object-fit:cover}
+.shot-zoom{position:absolute;right:5px;bottom:5px;background:#0009;color:#fff;border-radius:7px;padding:4px;display:grid}
+.shot-none{width:96px;height:132px;border:1px dashed var(--border);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#9aa0ae;text-align:center}
+.claim-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.claim-body small{color:#5c6376;overflow-wrap:anywhere}
+.claim-amount{font-family:Manrope,sans-serif;font-size:22px;letter-spacing:-.04em}
+.claim-actions{display:grid;gap:10px;margin-top:10px}
+.claim-confirm,.claim-reject{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.claim-confirm input,.claim-reject input{flex:1 1 120px;min-width:0;min-height:44px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:#fff}
+.claim-confirm .form-hint{flex-basis:100%;margin:0}
+.claims-history{margin-top:14px;border-top:1px solid var(--border);padding-top:8px}
+.claims-history summary{cursor:pointer;font-weight:750;font-size:12px;color:#5c6376;min-height:44px;display:flex;align-items:center}
+.claims-history ul{list-style:none;margin:0;padding:0}
+.claims-history li{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;padding:8px 0;border-top:1px solid #f3f4f7;font-size:12px}
+.text-link{border:0;background:none;color:var(--primary);font-weight:750;text-decoration:underline;min-height:44px;padding:0 4px}
+.shot-modal{position:fixed;inset:0;z-index:80;background:#0b0b10e6;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom))}
+.shot-modal img{max-width:100%;max-height:calc(100vh - 120px);border-radius:12px;object-fit:contain}
+@media(max-width:760px){
+  .report-card,.claims-panel{padding:18px 16px}
+  .claim-item{flex-direction:column}
+  .shot-thumb,.shot-none{width:100%;height:220px}
+  .claim-confirm .button,.claim-reject .button{flex:1 1 100%}
+}
+@media(max-width:760px){.shot-none{height:auto;flex-direction:row;justify-content:flex-start;padding:10px 12px}}
+/* Keep the hidden file input hidden (the general .field input rule would otherwise widen it). */
+.field input.sr-only{position:absolute;width:1px;height:1px;min-height:0;padding:0;margin:-1px;border:0;overflow:hidden;clip:rect(0,0,0,0)}
+.claims-list{grid-template-columns:minmax(0,1fr)}
+.claim-item{min-width:0}
+.claim-actions .button{white-space:normal;text-align:center}
+@media(max-width:760px){.edit-links a{display:inline-flex;align-items:center;min-height:44px}}

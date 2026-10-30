@@ -2,7 +2,10 @@
  * Pure planning logic for Google Drive sync, kept separate from network and
  * database code so its safety rules can be unit-tested:
  * - one record per Google Drive file ID (renames never create a new record);
- * - new files always start as "discovered" (pending review), never billed;
+ * - new files start as "discovered" (pending review), or, when auto-delivery is on, "delivered" on
+ *   their upload date (India time). Exceptions that stay pending: likely re-uploads of an existing
+ *   reel, and files uploaded before auto-delivery was switched on (so a first sync never bills a backlog);
+ * - a file that returns to the folder after being auto-removed gets its previous status back;
  * - sync never overwrites status, delivery date, notes, links or confirmed price;
  * - once a reel is past review, its duration is locked so later Drive revisions
  *   cannot silently change an issued bill.
@@ -22,17 +25,20 @@ export type ExistingRow = {
   duration_seconds: number | null;
   drive_modified_at: string | null;
   revision_count: number | null;
+  removed_by_sync?: boolean | null;
+  status_before_removal?: string | null;
 };
 export type InsertRow = {
   drive_item_id: string; source: "google_drive"; title: string; drive_web_url: string; mime_type: string | null;
   drive_created_at: string | null; drive_modified_at: string | null; duration_seconds: number | null;
-  status: "discovered"; first_seen_at: string; last_seen_at: string; drive_missing_at: null; updated_at: string;
+  status: "discovered" | "delivered"; delivery_date: string | null; auto_delivered: boolean; drive_folder_id: string | null;
+  first_seen_at: string; last_seen_at: string; drive_missing_at: null; updated_at: string;
 };
 export type MetadataRow = {
   drive_item_id: string; source: "google_drive"; title: string; drive_web_url: string; mime_type: string | null;
-  drive_created_at: string | null; drive_modified_at: string | null; last_seen_at: string; drive_missing_at: null; updated_at: string;
+  drive_created_at: string | null; drive_modified_at: string | null; drive_folder_id: string | null; last_seen_at: string; drive_missing_at: null; updated_at: string;
 };
-export type RowPatch = { drive_item_id: string; patch: { duration_seconds?: number; revision_count?: number } };
+export type RowPatch = { drive_item_id: string; patch: { duration_seconds?: number; revision_count?: number; status?: string; removed_by_sync?: boolean; status_before_removal?: null } };
 
 export const FOLDER_MIME = "application/vnd.google-apps.folder";
 const VIDEO_EXT = /\.(mp4|mov|m4v|webm|avi|mkv)$/i;
@@ -53,7 +59,22 @@ function title(item: DriveItem): string {
   return t || "Untitled video";
 }
 
-export function planSync(items: DriveItem[], existing: Map<string, ExistingRow>, now: string) {
+/** Calendar date in India for an ISO timestamp (India has no daylight saving: UTC+05:30). */
+function indiaDate(iso: string): string {
+  const t = Date.parse(iso);
+  return new Date((Number.isFinite(t) ? t : Date.now()) + 5.5 * 3_600_000).toISOString().slice(0, 10);
+}
+export type PlanOptions = {
+  /** Mark brand-new uploads delivered on their upload date. */
+  autoDeliver?: boolean;
+  /** Only files uploaded at or after this time are auto-delivered (ISO timestamp). */
+  autoDeliverSince?: string | null;
+  /** Root Drive folder being monitored; stored on each reel so changing folders never removes old reels. */
+  folderId?: string | null;
+  /** normalizeTitle() of every active (not cancelled, still in Drive) reel. New titles are added as they're planned. */
+  takenTitles?: Set<string>;
+};
+export function planSync(items: DriveItem[], existing: Map<string, ExistingRow>, now: string, opts: PlanOptions = {}) {
   // The same file can be listed twice (pagination overlap or nested shortcuts): last listing wins.
   const unique = new Map<string, DriveItem>();
   for (const item of items) if (item.id) unique.set(item.id, item);
@@ -61,16 +82,30 @@ export function planSync(items: DriveItem[], existing: Map<string, ExistingRow>,
   const inserts: InsertRow[] = [];
   const metadata: MetadataRow[] = [];
   const patches: RowPatch[] = [];
+  let autoDelivered = 0, heldForReview = 0;
+  const taken = opts.takenTitles ?? new Set<string>();
   for (const item of unique.values()) {
     const old = existing.get(item.id);
     const base = {
       drive_item_id: item.id, source: "google_drive" as const, title: title(item), drive_web_url: viewUrl(item),
       mime_type: item.mimeType || null, drive_created_at: item.createdTime || null, drive_modified_at: item.modifiedTime || null,
-      last_seen_at: now, drive_missing_at: null, updated_at: now
+      drive_folder_id: opts.folderId ?? null, last_seen_at: now, drive_missing_at: null, updated_at: now
     };
     const duration = driveDuration(item);
     if (!old) {
-      inserts.push({ ...base, duration_seconds: duration, status: "discovered", first_seen_at: now });
+      const key = normalizeTitle(base.title);
+      const reupload = !!key && taken.has(key);
+      if (key) taken.add(key);
+      const uploadedAt = Date.parse(item.createdTime || now);
+      const since = opts.autoDeliverSince ? Date.parse(opts.autoDeliverSince) : NaN;
+      const recent = !Number.isFinite(since) || uploadedAt >= since;
+      const deliver = !!opts.autoDeliver && recent && !reupload;
+      if (deliver) autoDelivered++; else if (opts.autoDeliver) heldForReview++;
+      inserts.push({
+        ...base, duration_seconds: duration, first_seen_at: now,
+        status: deliver ? "delivered" : "discovered", auto_delivered: deliver,
+        delivery_date: deliver ? indiaDate(item.createdTime || now) : null
+      });
       continue;
     }
     metadata.push(base);
@@ -83,9 +118,40 @@ export function planSync(items: DriveItem[], existing: Map<string, ExistingRow>,
     if (old.drive_modified_at && item.modifiedTime && Date.parse(item.modifiedTime) > Date.parse(old.drive_modified_at)) {
       patch.revision_count = (old.revision_count || 0) + 1;
     }
+    // The file is back in the folder (restored from trash or moved back): undo the automatic removal.
+    if (old.removed_by_sync) {
+      patch.status = old.status_before_removal || "discovered";
+      patch.removed_by_sync = false;
+      patch.status_before_removal = null;
+    }
     if (Object.keys(patch).length) patches.push({ drive_item_id: item.id, patch });
   }
-  return { inserts, metadata, patches };
+  const restored = patches.filter(p => p.patch.removed_by_sync === false).length;
+  return { inserts, metadata, patches, autoDelivered, heldForReview, restored };
+}
+
+export type MissingRow = { id: string; status: string; drive_folder_id: string | null };
+/**
+ * Decide what happens to synced reels that were NOT found in a complete scan of the folder
+ * (deleted, trashed or moved out). They are always flagged as missing. With auto-remove on,
+ * they are also cancelled, which takes them off the delivery log and out of billing; the
+ * previous status is kept so the reel is restored if the file comes back.
+ *
+ * Safety guard: if one scan would remove more than 5 reels AND more than half of the folder's active
+ * reels, that looks like a permissions problem or a wrong folder, not deletions. Then nothing is
+ * cancelled (only flagged) and a warning is returned for the admin.
+ */
+export function planRemovals(missing: MissingRow[], activeInFolder: number, autoRemove: boolean) {
+  const removable = missing.filter(r => r.status !== "cancelled");
+  const massRemoval = removable.length > 5 && removable.length > activeInFolder / 2;
+  const cancel = new Map<string, string[]>();
+  if (autoRemove && !massRemoval) for (const r of removable) cancel.set(r.status, [...(cancel.get(r.status) || []), r.id]);
+  return {
+    flagIds: missing.map(r => r.id),
+    cancelByStatus: cancel,
+    removed: autoRemove && !massRemoval ? removable.length : 0,
+    warning: autoRemove && massRemoval ? `${removable.length} reels disappeared from the folder in one sync, so none were removed automatically. If you really deleted them, cancel them in the reel library; otherwise check the folder link and Drive sharing.` : null
+  };
 }
 
 /** Normalised title used to spot re-uploads of the same reel under a new Drive file. */
@@ -99,10 +165,10 @@ export function normalizeTitle(title: string): string {
     .trim();
 }
 /** Reels still pending review whose title matches another non-cancelled reel: likely re-uploads. */
-export function possibleDuplicates<T extends { id: string; title: string; status: string }>(reels: T[]): Map<string, T> {
+export function possibleDuplicates<T extends { id: string; title: string; status: string; drive_missing_at?: string | null }>(reels: T[]): Map<string, T> {
   const byTitle = new Map<string, T[]>();
   for (const r of reels) {
-    if (r.status === "cancelled") continue;
+    if (r.status === "cancelled" || r.drive_missing_at) continue;
     const key = normalizeTitle(r.title);
     if (!key) continue;
     byTitle.set(key, [...(byTitle.get(key) || []), r]);

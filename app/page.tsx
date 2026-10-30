@@ -10,6 +10,7 @@ import { isConfigured } from "@/lib/supabase";
 import { Header, OverviewTotals } from "@/components/ui";
 import { WeekLedger, UnpricedReels } from "@/components/week-ledger";
 import { ActivityPanel } from "@/components/activity";
+import { ReportPayment } from "@/components/report-payment";
 import { AutoRefresh, OfflineBanner } from "@/components/live";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +66,7 @@ export default async function HomePage() {
       {!configured && <div className="public-setup-note">The portal isn&apos;t connected to its database yet, so no deliveries or payments are shown. (Admin: set the Supabase variables in your environment.)</div>}
       {databaseError ? <div className="public-setup-note" role="alert"><strong>Reel and payment records are temporarily unavailable.</strong> We couldn&apos;t reach the database, so no totals are shown rather than showing incorrect ones. Please refresh in a few minutes.</div> : <>
         <OverviewTotals totals={dashboard.totals} />
+        {configured && <ReportPayment weeks={dashboard.weeks} />}
         <ActivityPanel daily={dashboard.daily} sync={dashboard.sync} clientView />
         <div id="ledger" className="ledger-anchor" tabIndex={-1} />
         <UnpricedReels reels={dashboard.reels} clientView />

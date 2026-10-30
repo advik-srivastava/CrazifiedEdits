@@ -1,4 +1,4 @@
-import type { DayActivity, LedgerReel, LedgerTotals, Payment, Reel, WeekPaymentStatus, WeekSummary } from "./models";
+import type { DayActivity, LedgerReel, LedgerTotals, Payment, PublicClaim, Reel, WeekPaymentStatus, WeekSummary } from "./models";
 
 /** Agreed commercial terms. Do not change without a new agreement with the client. */
 export const RATE_INR = 600;
@@ -83,12 +83,12 @@ export function billingCalendar(): { starting: string; ending: string }[] {
 export function weekYear(week: { starting: string; ending: string }): string {
   return week.starting < CALENDAR_START && week.ending >= CALENDAR_START ? CALENDAR_START.slice(0, 4) : week.starting.slice(0, 4);
 }
-export function buildLedger(reels: LedgerReel[], payments: Payment[], today: string): WeekSummary[] {
+export function buildLedger(reels: LedgerReel[], payments: Payment[], today: string, claims: PublicClaim[] = []): WeekSummary[] {
   const weeks = new Map<string, WeekSummary>();
   function ensure(end: string): WeekSummary {
     let w = weeks.get(end);
     if (!w) {
-      w = { ending: end, starting: shiftISODate(end, -6), count: 0, delivered: 0, reviewCount: 0, billed: 0, received: 0, due: 0, reels: [], payments: [] };
+      w = { ending: end, starting: shiftISODate(end, -6), count: 0, delivered: 0, reviewCount: 0, billed: 0, received: 0, due: 0, reels: [], payments: [], reported: [] };
       weeks.set(end, w);
     }
     return w;
@@ -110,6 +110,8 @@ export function buildLedger(reels: LedgerReel[], payments: Payment[], today: str
     const w = ensure(pay.week_ending);
     w.payments.push(pay); w.received += Number(pay.amount);
   }
+  // Client-reported payments are shown on their week (pending or not confirmed) but only count once the admin confirms them.
+  for (const claim of claims) if (claim.status !== "confirmed") ensure(claim.week_ending).reported.push(claim);
   for (const w of weeks.values()) {
     w.billed = roundMoney(w.billed); w.received = roundMoney(w.received);
     w.due = roundMoney(w.billed - w.received);

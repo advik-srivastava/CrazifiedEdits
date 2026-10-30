@@ -82,11 +82,39 @@ try {
   const a = (await q(claim)).rowCount, b = (await q(claim)).rowCount;
   ok(a === 1 && b === 0, "sync lock: first claim wins, second is refused");
 
+  // ---- V1.4
+  const before14 = (await q("SELECT id,title,status,delivery_date,notes FROM reels ORDER BY id")).rows;
+  await q(fs.readFileSync(repo + "migrate_v1_4.sql", "utf8"));
+  await q(fs.readFileSync(repo + "migrate_v1_4.sql", "utf8"));
+  ok(true, "migrate_v1_4.sql applies twice without error");
+  ok(JSON.stringify((await q("SELECT id,title,status,delivery_date,notes FROM reels ORDER BY id")).rows) === JSON.stringify(before14), "V1.4 leaves existing reels unchanged");
+  const st = (await q("SELECT auto_deliver, auto_remove, auto_deliver_since IS NOT NULL AS since FROM app_settings WHERE id=1")).rows[0];
+  ok(st.auto_deliver === true && st.auto_remove === true && st.since === true, "automation on by default, starting from migration time");
+  const rd = (await q("SELECT bool_or(auto_delivered) a, bool_or(removed_by_sync) r FROM reels")).rows[0];
+  ok(rd.a === false && rd.r === false, "existing reels are not marked auto-delivered or removed");
+  await q("INSERT INTO sync_events (trigger,status) VALUES ('webhook','success')");
+  ok(true, "sync_events accepts 'webhook'");
+  let badPrev = false; try { await q("UPDATE reels SET status_before_removal='bogus' WHERE title='New'"); } catch { badPrev = true; }
+  ok(badPrev, "status_before_removal only accepts real statuses");
+  await q("INSERT INTO payment_claims (week_ending,amount,paid_on,method,reference) VALUES ('2026-11-01',6000,'2026-10-31','UPI','4123')");
+  ok((await q("SELECT status FROM payment_claims")).rows[0].status === "pending", "client report starts pending");
+  const rej = async (sql) => { try { await q(sql); return false; } catch { return true; } };
+  ok(await rej("INSERT INTO payment_claims (week_ending,amount,paid_on) VALUES ('2026-11-02',100,'2026-11-02')"), "report week must be a Sunday");
+  ok(await rej("INSERT INTO payment_claims (week_ending,amount,paid_on) VALUES ('2026-11-01',0,'2026-11-01')"), "report amount must be positive");
+  ok(await rej("INSERT INTO payment_claims (week_ending,amount,paid_on,status) VALUES ('2026-11-01',5,'2026-11-01','paid')"), "report status limited to pending/confirmed/rejected");
+  const pid = (await q("INSERT INTO payments (week_ending,amount,paid_on) VALUES ('2026-11-01',6000,'2026-10-31') RETURNING id")).rows[0].id;
+  await q("UPDATE payment_claims SET status='confirmed', payment_id=$1", [pid]);
+  await q("DELETE FROM payments WHERE id=$1", [pid]);
+  ok((await q("SELECT payment_id FROM payment_claims")).rows[0].payment_id === null, "deleting a payment keeps the report (link cleared)");
+  ok((await q("SELECT relrowsecurity r FROM pg_class WHERE relname='payment_claims'")).rows[0].r === true, "payment_claims has RLS on");
+  ok((await q("SELECT count(*)::int n FROM pg_policies WHERE tablename='payment_claims'")).rows[0].n === 0, "payment_claims has no public policies");
+
   // A fresh project path: schema.sql then migrate_v1_3.sql.
   await q("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
   await q(fs.readFileSync(repo + "schema.sql", "utf8"));
   await q(fs.readFileSync(repo + "migrate_v1_3.sql", "utf8"));
-  ok(true, "fresh install: schema.sql + migrate_v1_3.sql apply cleanly");
+  await q(fs.readFileSync(repo + "migrate_v1_4.sql", "utf8"));
+  ok(true, "fresh install: schema.sql + migrate_v1_3.sql + migrate_v1_4.sql apply cleanly");
 } catch (e) { console.error("ERROR", e.message); fails++; }
 finally { await c.end(); await server.stop(); }
 console.log(fails ? `${fails} FAILED` : "ALL MIGRATION CHECKS PASSED");

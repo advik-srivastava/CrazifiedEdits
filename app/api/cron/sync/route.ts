@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   if (secret.length < 32 || !safeEqual(auth, `Bearer ${secret}`)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
     const r = await syncGoogleDrive("cron");
-    return NextResponse.json({ ok: true, skipped: r.skipped, imported: r.imported, updated: r.updated, missing: r.missing, scanned: r.scanned });
+    return NextResponse.json({ ok: true, skipped: r.skipped, imported: r.imported, delivered: r.delivered, removed: r.removed, updated: r.updated, missing: r.missing, scanned: r.scanned });
   } catch (e) {
     console.error("Google Drive cron sync failed:", e instanceof Error ? e.message : "Unknown error");
     return NextResponse.json({ ok: false, error: "Sync failed. Review settings in the admin dashboard." }, { status: 500 });

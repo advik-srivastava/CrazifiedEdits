@@ -1,10 +1,12 @@
 import { headers } from "next/headers";
 import Link from "next/link";
 import { after } from "next/server";
-import { syncIfStale } from "@/lib/google-drive";
+import { syncIfStale, webhookAddress } from "@/lib/google-drive";
 import { LogOut, ShieldCheck, Video, Eye, AlertCircle } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
 import { getConnection, getDashboard, getSettings, getSyncEvents } from "@/lib/data";
+import { getClaimsForAdmin } from "@/lib/claims-server";
+import { ClaimsPanel } from "@/components/claims-panel";
 import { isConfigured } from "@/lib/supabase";
 import { Header, OverviewTotals, Pill } from "@/components/ui";
 import { WeekLedger, UnpricedReels } from "@/components/week-ledger";
@@ -15,6 +17,10 @@ import { AddReelForm, AdminReelList, ClientLink, GoogleDrivePanel, PaymentEntry 
 import { adminLedgerReel } from "@/lib/public-ledger";
 import { todayInIndia } from "@/lib/billing";
 
+/** True while Drive change notifications are registered and unexpired. */
+function watchActive(expires: string | null | undefined): boolean {
+  return !!expires && Date.parse(expires) > Date.now();
+}
 /** True while another sync holds the lock. */
 function syncRunning(lockUntil: string | null | undefined): boolean {
   return !!lockUntil && Date.parse(lockUntil) > Date.now();
@@ -31,14 +37,15 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const params = await searchParams;
   let data;
   try {
-    const [dashboard, settings, connection, events] = await Promise.all([getDashboard(), getSettings(), getConnection(), getSyncEvents()]);
-    data = { dashboard, settings, connection, events };
+    const [dashboard, settings, connection, events, claims] = await Promise.all([getDashboard(), getSettings(), getConnection(), getSyncEvents(), getClaimsForAdmin()]);
+    data = { dashboard, settings, connection, events, claims };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("Admin dashboard unavailable:", message);
     return <main className="centered"><div className="auth-panel" role="alert"><span className="overline">DATABASE UNAVAILABLE</span><h1>Couldn&apos;t load your records</h1><p>The app reached Supabase but the request failed, or Supabase is unreachable. No data was changed.</p><p className="muted"><AlertCircle size={14} aria-hidden /> {message.slice(0, 200)}</p><p className="muted">Check the Supabase URL and service-role key, and that every file in <code>sql/</code> has been run. Then refresh.</p><Link className="button primary" href="/admin">Try again</Link></div></main>;
   }
-  const { dashboard, settings, connection, events } = data;
+  const { dashboard, settings, connection, events, claims } = data;
+  const pendingClaims = claims.filter(c => c.status === "pending").length;
   const requestHeaders = await headers();
   const protocol = requestHeaders.get("x-forwarded-proto") || (process.env.NODE_ENV === "production" ? "https" : "http");
   const host = requestHeaders.get("x-forwarded-host") || requestHeaders.get("host") || "localhost:3000";
@@ -49,13 +56,15 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
     <AutoRefresh intervalMs={90_000} />
     <main className="app-main"><div className="workspace-kicker"><span><span className="live-dot" />CRAZIFIEDEDITS · CRAZIFIED STUDIOS</span><span>Signed in as {user.email}</span></div>
       <Toast key={`${params.success}|${params.error}`} success={params.success} error={params.error} />
+      {pendingClaims > 0 && <a href="#claims" className="claims-banner"><span className="live-dot" />Mohit reported {pendingClaims} payment{pendingClaims === 1 ? "" : "s"}. Review {pendingClaims === 1 ? "it" : "them"} →</a>}
       <OverviewTotals totals={dashboard.totals} />
       <ActivityPanel daily={dashboard.daily} sync={sync} />
       <UnpricedReels reels={dashboard.reels.filter(r => r.delivery_date).map(adminLedgerReel)} />
       <WeekLedger weeks={dashboard.weeks} />
       <div className="admin-section-head"><div><div className="eyebrow">YOUR CONTROL CENTER</div><h2>Manage deliveries</h2><p>Connect Google Drive, review new uploads, mark deliveries and record Mohit&apos;s payments. The homepage shows only delivered reels and weekly settlements.</p></div><a href="#reels" className="button secondary"><Video size={16} aria-hidden />Review videos</a></div>
-      <div className="admin-two-col"><GoogleDrivePanel settings={settings} connection={connection} events={events} syncInProgress={syncRunning(settings.sync_lock_until)} /><AddReelForm /></div>
+      <div className="admin-two-col"><GoogleDrivePanel settings={settings} connection={connection} events={events} syncInProgress={syncRunning(settings.sync_lock_until)} instant={!webhookAddress() ? "unavailable" : watchActive(settings.watch_expires_at) ? "on" : "off"} /><AddReelForm /></div>
       <AdminReelList reels={dashboard.reels} />
+      <ClaimsPanel claims={claims} />
       <div className="admin-two-col lower"><PaymentEntry payments={dashboard.payments} /><section className="surface sharing-panel"><div className="eyebrow">CLIENT ACCESS</div><h2>Share the live ledger</h2><p>Mohit can open the homepage to see delivered reels, Drive links and payments without signing in. Only you can edit records.</p><ClientLink url={clientUrl} /><div className="sharing-note"><ShieldCheck size={17} aria-hidden /><span>The homepage is public to anyone with the URL and is hidden from search engines. It never shows notes, payment references, pending uploads or account settings. Google Drive files still follow their own Drive sharing settings.</span></div></section></div>
       <footer className="app-footer"><span>© {todayInIndia().slice(0, 4)} Crazified Studios • Edited by Advik</span><span>Monday–Sunday billing · ₹600 per reel up to 60 s</span></footer>
     </main></>;

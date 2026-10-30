@@ -56,7 +56,14 @@ const events = [
   { id: 2, trigger: "manual", status: "skipped", started_at: new Date(now - 20 * 60_000).toISOString(), finished_at: null, scanned: 0, imported: 0, updated: 0, missing: 0, error: "Another sync was already running." },
   { id: 1, trigger: "cron", status: "error", started_at: new Date(now - 22 * 60_000).toISOString(), finished_at: null, scanned: 12, imported: 0, updated: 12, missing: 0, error: "Google Drive is rate-limiting requests right now." }
 ];
-const tables = { reels, payments, sync_events: events };
+// 2x2 PNG used as a sample payment screenshot.
+const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP8z8DAwMDAxMDAwMDAAAANHQEDK+mmyAAAAABJRU5ErkJggg==", "base64");
+const claims = [
+  { id: "20000000-0000-4000-8000-000000000001", week_ending: sun(1), amount: 3000, paid_on: d(-1), method: "UPI", reference: "UPI 4123 5678 9012", note: "Balance for last week", screenshot_path: "2026/sample.png", status: "pending", payment_id: null, review_note: null, submitter_hash: "x", submitted_at: iso(d(-1), 18), reviewed_at: null },
+  { id: "20000000-0000-4000-8000-000000000002", week_ending: sun(0), amount: 1200, paid_on: today, method: "UPI", reference: null, note: null, screenshot_path: null, status: "pending", payment_id: null, review_note: null, submitter_hash: "y", submitted_at: iso(today, 9), reviewed_at: null }
+];
+export const received = [];
+const tables = { reels, payments, sync_events: events, payment_claims: claims };
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
 export const ACCESS_TOKEN = `${b64({ alg: "HS256", typ: "JWT" })}.${b64({ sub: "admin-user", email: ADMIN, role: "authenticated", aud: "authenticated", exp: Math.floor(now / 1000) + 86400 })}.sig`;
 const user = { id: "admin-user", aud: "authenticated", role: "authenticated", email: ADMIN, app_metadata: {}, user_metadata: {}, created_at: iso(d(-30)) };
@@ -66,8 +73,16 @@ http.createServer((req, res) => {
   const send = (code, body) => { res.writeHead(code, { "content-type": "application/json", "content-range": "0-*/*" }); res.end(body === undefined ? "" : JSON.stringify(body)); };
   if (url.pathname === "/auth/v1/user") return (req.headers.authorization === `Bearer ${ACCESS_TOKEN}`) ? send(200, user) : send(401, { msg: "invalid" });
   if (url.pathname.startsWith("/auth/v1/")) return send(200, { keys: [] });
+  if (url.pathname.startsWith("/storage/v1/object/sign/")) return send(200, [{ path: "2026/sample.png", signedURL: "/object/public-sample/sample.png?token=t", error: null }]);
+  if (url.pathname.startsWith("/storage/v1/object/public-sample/")) { res.writeHead(200, { "content-type": "image/png" }); return res.end(PNG); }
+  if (url.pathname.startsWith("/storage/v1/object/")) {
+    let n = 0; req.on("data", c => n += c.length); req.on("end", () => { console.log(`UPLOAD ${url.pathname} ${req.headers["content-type"]} ${n} bytes`); send(200, { Key: url.pathname }); }); return;
+  }
   const table = url.pathname.replace("/rest/v1/", "");
-  if (req.method !== "GET") return send(200, []); // writes are accepted and ignored
+  if (req.method !== "GET" && req.method !== "HEAD") { // writes are logged and ignored
+    let body = ""; req.on("data", c => body += c); req.on("end", () => { console.log(`WRITE ${req.method} ${table} ${body.slice(0, 300)}`); send(200, []); }); return;
+  }
+  if (req.method === "HEAD") { res.writeHead(200, { "content-range": "*/0" }); return res.end(); }
   const single = (req.headers.accept || "").includes("vnd.pgrst.object");
   if (table === "app_settings") return send(200, single ? settings : [settings]);
   if (table === "google_drive_connection") return send(200, single ? connection : [connection]);

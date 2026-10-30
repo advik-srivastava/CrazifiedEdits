@@ -22,6 +22,11 @@ export type Reel = {
   revision_count?: number | null;
   confirmed_rate_inr?: number | string | null;
   billing_week_ending?: string | null;
+  // V1.4 columns (sql/migrate_v1_4.sql).
+  drive_folder_id?: string | null;
+  auto_delivered?: boolean | null;
+  removed_by_sync?: boolean | null;
+  status_before_removal?: ReelStatus | null;
 };
 /** Fields that are safe to show on the public client dashboard. No internal IDs. */
 export type LedgerReel = {
@@ -51,11 +56,21 @@ export type Settings = {
   last_sync_error: string | null;
   sync_lock_until?: string | null;
   last_sync_started_at?: string | null;
+  // V1.4
+  auto_deliver?: boolean | null;
+  auto_deliver_since?: string | null;
+  auto_remove?: boolean | null;
+  resync_requested_at?: string | null;
+  watch_channel_id?: string | null;
+  watch_resource_id?: string | null;
+  watch_token?: string | null;
+  watch_expires_at?: string | null;
+  last_change_at?: string | null;
 };
 export type Connection = { id: number; account_email: string | null; account_name: string | null; refresh_token_ciphertext: string; connected_at: string; connected_by?: string | null };
 export type SyncEvent = {
   id: number;
-  trigger: "manual" | "cron" | "auto";
+  trigger: "manual" | "cron" | "auto" | "webhook";
   status: "running" | "success" | "error" | "skipped";
   started_at: string;
   finished_at: string | null;
@@ -63,8 +78,29 @@ export type SyncEvent = {
   imported: number;
   updated: number;
   missing: number;
+  removed?: number;
+  delivered?: number;
   error: string | null;
 };
+export type ClaimStatus = "pending" | "confirmed" | "rejected";
+/** A payment the client reported from the public page. Reference, note and screenshot stay admin-only. */
+export type PaymentClaim = {
+  id: string;
+  week_ending: string;
+  amount: number;
+  paid_on: string;
+  method: string | null;
+  reference: string | null;
+  note: string | null;
+  screenshot_path: string | null;
+  status: ClaimStatus;
+  payment_id: string | null;
+  review_note: string | null;
+  submitted_at: string;
+  reviewed_at: string | null;
+};
+/** Public projection of a claim: no reference, note, screenshot or IDs. */
+export type PublicClaim = { key: string; week_ending: string; amount: number; paid_on: string; status: ClaimStatus };
 export type WeekPaymentStatus = "no_charges" | "unpaid" | "partial" | "paid";
 export type WeekSummary = {
   ending: string;
@@ -79,6 +115,8 @@ export type WeekSummary = {
   due: number;
   reels: LedgerReel[];
   payments: Payment[];
+  /** Client-reported payments awaiting confirmation (not counted in received). */
+  reported: PublicClaim[];
 };
 export type DayActivity = {
   date: string;
@@ -90,3 +128,6 @@ export type DayActivity = {
 };
 export type LedgerTotals = { delivered: number; billedReels: number; billed: number; received: number; outstanding: number; reviewCount: number };
 export type PublicSyncStatus = { lastSyncedAt: string | null; healthy: boolean };
+
+/** Admin view of a report, with a short-lived link to its private screenshot. */
+export type AdminClaimView = PaymentClaim & { screenshot_url: string | null };

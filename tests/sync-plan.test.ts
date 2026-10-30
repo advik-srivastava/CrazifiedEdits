@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { driveDuration, isVideo, normalizeTitle, planSync, possibleDuplicates, type DriveItem, type ExistingRow } from "../lib/sync-plan";
+import { driveDuration, isVideo, normalizeTitle, planRemovals, planSync, possibleDuplicates, type DriveItem, type ExistingRow } from "../lib/sync-plan";
 import { adminEmails, isAdminEmail } from "../lib/admin-emails";
 
 const NOW = "2026-10-31T06:00:00.000Z";
@@ -78,4 +78,55 @@ test("admin allow-list: one or many emails, case-insensitive, placeholders ignor
   assert.ok(!isAdminEmail("mohit@x.com", "a@x.com"));
   assert.ok(!isAdminEmail(null, "a@x.com"));
   assert.ok(!isAdminEmail("anyone@x.com", ""), "no admin configured means nobody is admin");
+});
+
+test("auto-delivery: new uploads are delivered on their India upload date", () => {
+  const late = item({ id: "late1234567890123456", name: "Late night reel.mp4", createdTime: "2026-10-31T19:00:00Z" }); // 00:30 IST on 1 Nov
+  const { inserts, autoDelivered } = planSync([item(), late], new Map(), NOW, { autoDeliver: true, autoDeliverSince: "2026-10-01T00:00:00Z", folderId: "root" });
+  assert.equal(autoDelivered, 2);
+  assert.deepEqual(inserts.map(i => [i.status, i.delivery_date, i.auto_delivered, i.drive_folder_id]), [["delivered", "2026-10-31", true, "root"], ["delivered", "2026-11-01", true, "root"]]);
+});
+test("auto-delivery is off by default and never applies to files uploaded before it was switched on", () => {
+  assert.equal(planSync([item()], new Map(), NOW).inserts[0].status, "discovered");
+  const { inserts, heldForReview } = planSync([item({ createdTime: "2026-09-01T00:00:00Z" })], new Map(), NOW, { autoDeliver: true, autoDeliverSince: "2026-10-30T00:00:00Z" });
+  assert.equal(inserts[0].status, "discovered"); assert.equal(inserts[0].delivery_date, null); assert.equal(heldForReview, 1);
+});
+test("auto-delivery holds likely re-uploads for review, including two copies in one sync", () => {
+  const taken = new Set(["gut health morning"]);
+  const { inserts } = planSync([
+    item({ id: "a1234567890123456789", name: "Copy of Gut Health Morning.mp4" }),
+    item({ id: "b1234567890123456789", name: "New reel.mp4" }),
+    item({ id: "c1234567890123456789", name: "New reel (1).mp4" })
+  ], new Map(), NOW, { autoDeliver: true, takenTitles: taken });
+  assert.deepEqual(inserts.map(i => i.status), ["discovered", "delivered", "discovered"]);
+});
+test("existing reels are never re-delivered or overwritten by auto-delivery", () => {
+  const { inserts, patches } = planSync([item()], new Map([["fileA123456789012345", row({ status: "discovered" })]]), NOW, { autoDeliver: true });
+  assert.equal(inserts.length, 0);
+  assert.ok(patches.every(p => !("status" in p.patch)), "a pending reel stays pending");
+});
+test("a file that comes back after automatic removal gets its previous status back", () => {
+  const back = planSync([item()], new Map([["fileA123456789012345", row({ status: "cancelled", removed_by_sync: true, status_before_removal: "approved" })]]), NOW);
+  assert.deepEqual(back.patches[0].patch, { status: "approved", removed_by_sync: false, status_before_removal: null });
+  assert.equal(back.restored, 1);
+  const manual = planSync([item()], new Map([["fileA123456789012345", row({ status: "cancelled", removed_by_sync: false })]]), NOW);
+  assert.equal(manual.patches.length, 0, "a reel you cancelled yourself stays cancelled");
+});
+test("deleted files: removed from the log when auto-remove is on, only flagged when off", () => {
+  const missing = [{ id: "1", status: "delivered", drive_folder_id: "f" }, { id: "2", status: "discovered", drive_folder_id: "f" }, { id: "3", status: "cancelled", drive_folder_id: "f" }];
+  const on = planRemovals(missing, 20, true);
+  assert.deepEqual(on.flagIds, ["1", "2", "3"]);
+  assert.deepEqual([...on.cancelByStatus], [["delivered", ["1"]], ["discovered", ["2"]]]);
+  assert.equal(on.removed, 2); assert.equal(on.warning, null);
+  const off = planRemovals(missing, 20, false);
+  assert.equal(off.cancelByStatus.size, 0); assert.equal(off.removed, 0);
+});
+test("mass disappearance (wrong folder or lost access) removes nothing and warns", () => {
+  const many = Array.from({ length: 12 }, (_, i) => ({ id: String(i), status: "delivered", drive_folder_id: "f" }));
+  const r = planRemovals(many, 15, true);
+  assert.equal(r.cancelByStatus.size, 0); assert.equal(r.removed, 0);
+  assert.match(r.warning || "", /none were removed/);
+  assert.equal(r.flagIds.length, 12, "still flagged so you can see them");
+  assert.equal(planRemovals(many.slice(0, 5), 6, true).removed, 5, "a handful of deletions is fine");
+  assert.equal(planRemovals(many, 100, true).removed, 12, "12 of 100 is not a mass removal");
 });

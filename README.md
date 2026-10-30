@@ -5,9 +5,9 @@ Google Drive sync · Monday–Sunday billing weeks through 2030 · ₹600 per re
 
 | Route | Who | What |
 |---|---|---|
-| `/` | Anyone with the URL | Read-only client dashboard: totals, Today/Yesterday, weekly reel log, Drive links, payments |
+| `/` | Anyone with the URL | Client dashboard: totals, Today/Yesterday, weekly reel log, Drive links, payments, and **Report a payment** (with screenshot) |
 | `/login` | Admin | Supabase email + password sign-in |
-| `/admin` | Admin only (server-enforced) | Review uploads, mark delivered, prices, payments, Google Drive, sync log |
+| `/admin` | Admin only (server-enforced) | Review uploads, prices, payments, confirm client payment reports, Google Drive automation, sync log |
 
 Stack: Next.js 16 (App Router, TypeScript) · Supabase Postgres + Auth · Google Drive API · Vercel.
 
@@ -16,7 +16,8 @@ Stack: Next.js 16 (App Router, TypeScript) · Supabase Postgres + Auth · Google
 ## Billing rules
 
 - **₹600 per reel** that is *delivered* (status Delivered, Approved or Revision, with a delivery date) and **1–60 seconds long** (60 s exactly is billable).
-- **New Drive uploads are never billed automatically.** They arrive as **Pending review**. Billing starts only when the admin marks a reel delivered.
+- **Auto-delivery (default on, switchable):** a new Drive upload is marked delivered on its upload date and billed. Uploads from before it was switched on, and likely re-uploads, stay **Pending review**. With it off, every upload waits for you to mark it delivered.
+- **Auto-removal (default on, switchable):** a video deleted, trashed or moved out of the folder is taken off the delivery log and its charge removed; it's restored if the file comes back. Recorded payments are never changed.
 - **Over 60 s, or unknown length → "Pricing review required."** These reels are listed in the weekly log but excluded from totals until the admin enters a **Confirmed price** for that reel.
 - **Billing week** = the Monday–Sunday week containing the delivery date (settled Sunday). Every week from 29 Dec 2025 – 4 Jan 2026 through 30 Dec 2030 – 5 Jan 2031 is selectable, including empty weeks. A week that crosses New Year is filed under the year its Monday falls in (the first week counts as 2026).
 - **Weekly billed** = sum of billed reels delivered that week. **Balance due** = weekly billed − payments allocated to that week. Status: *No charges · Unpaid · Partially paid · Paid* (an overpayment shows as a credit).
@@ -29,10 +30,14 @@ Stack: Next.js 16 (App Router, TypeScript) · Supabase Postgres + Auth · Google
 - Refresh token is stored **encrypted (AES-256-GCM)** server-side in Supabase.
 - One record per Drive file ID (unique constraint). New files are inserted; existing ones get a metadata-only update, so sync can never overwrite status, delivery date, notes, links or prices.
 - Imports file name, Drive ID, view link, MIME type, created/modified time and duration (when Drive has processed it; it fills in on a later sync).
-- **Schedule (works on Vercel Hobby):** whenever the client or admin dashboard is opened and the last sync is over 15 minutes old, a sync runs in the background after the page loads (so the page is never slowed). A daily Vercel Cron (`vercel.json`, 02:30 IST) is the fallback, plus **Sync now** in admin. A database lock prevents overlapping runs; each run is recorded in `sync_events` (*Sync history*).
+- **Instant sync:** Google Drive notifies `/api/gdrive/webhook` when anything changes, so uploads and deletions show within about 30 seconds. Needs the live `https://` site (set in `GOOGLE_REDIRECT_URI`); the channel renews itself and admin shows its status. `robots.txt` lets only Google's notifier (APIs-Google) reach that URL.
+- **Fallback schedule (works on Vercel Hobby):** whenever the client or admin dashboard is opened and the last sync is over 15 minutes old, a sync runs in the background after the page loads (so the page is never slowed). A daily Vercel Cron (`vercel.json`, 02:30 IST) is the fallback, plus **Sync now** in admin. A database lock prevents overlapping runs; each run is recorded in `sync_events` (*Sync history*).
 - Retries Google 429/5xx with backoff; clear messages for expired authorization, missing permissions and wrong folder links.
 - Likely re-uploads (e.g. "Copy of …", "(1)") are flagged in admin before they can be billed twice.
-- **Push notifications (Drive `changes.watch`) are not used.** They need a verified webhook domain and watch the whole Drive, not one folder. Polling is metadata-only and cheap. See *Limitations*.
+
+## Client payment reports
+
+Mohit taps **Report a payment** on the homepage, enters the week, amount, date and (optionally) a UPI/transaction ID and screenshot. The week then shows *Payment reported · awaiting confirmation*; balances don't change. In admin, **Payments reported by Mohit** shows the screenshot. **Confirm received** records it as a payment (you can adjust the amount), and **Not received** marks it unconfirmed. Screenshots live in a private Supabase Storage bucket (`payment-proofs`) and are only shown to the admin through 10-minute links.
 
 ## Privacy
 
@@ -49,9 +54,10 @@ Stack: Next.js 16 (App Router, TypeScript) · Supabase Postgres + Auth · Google
 
 1. Create a project (or keep your existing one; **don't delete its tables**).
 2. In **SQL Editor**:
-   - **New project:** run `sql/schema.sql`, then `sql/migrate_v1_3.sql`.
-   - **Existing V1.1:** run `sql/migrate_v1_2_google_drive.sql`, then `sql/migrate_v1_3.sql`.
-   - **Existing V1.2 / V1.2.1:** run `sql/migrate_v1_3.sql`.
+   - **New project:** run `sql/schema.sql`, then `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`.
+   - **Existing V1.1:** run `sql/migrate_v1_2_google_drive.sql`, then `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`.
+   - **Existing V1.2 / V1.2.1:** run `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`.
+   - **Already on V1.3:** run `sql/migrate_v1_4.sql`.
 
    Migrations are additive, transactional and safe to re-run; they never delete rows.
 3. **Authentication → Users → Add user**: create the admin account with email + password. Put that email in `ADMIN_EMAIL`. Disable public sign-ups (Authentication → Sign In / Providers → turn off "Allow new users to sign up"). Only `ADMIN_EMAIL` accounts can use `/admin` either way.
@@ -129,6 +135,6 @@ npm run verify       # lint + typecheck + unit tests + production build
 
 ## Limitations
 
-- Sync is polling, not instant push: a new upload appears on the next dashboard visit after 15 minutes have passed since the last sync (the visit that starts the sync shows it on the next refresh, within about a minute), or at the daily run. Use **Sync now** for an immediate check.
+- If instant sync is unavailable (e.g. on localhost), sync falls back to polling: a new upload appears on the next dashboard visit after 15 minutes have passed since the last sync (the visit that starts the sync shows it on the next refresh, within about a minute), or at the daily run. Use **Sync now** for an immediate check.
 - One sync handles up to about 10,000 videos / 120 sub-folders within Vercel's 60-second function limit.
 - Payments are recorded manually; this is a ledger, not a payment processor or accounting system.

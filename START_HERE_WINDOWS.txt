@@ -1,9 +1,9 @@
-CRAZIFIEDEDITS V1.3 · BY CRAZIFIED STUDIOS
+CRAZIFIEDEDITS V1.4 · BY CRAZIFIED STUDIOS
 Quick start on Windows. README.md has the full guide (Supabase, Google Cloud, Vercel).
 
 UPGRADING FROM V1.2 / V1.2.1 (your Supabase data is kept):
 1. Pull the latest code from GitHub (or extract the new ZIP into a NEW folder).
-2. Supabase -> SQL Editor -> New query -> paste sql/migrate_v1_3.sql -> Run.
+2. Supabase -> SQL Editor -> run sql/migrate_v1_3.sql, then sql/migrate_v1_4.sql (each: New query, paste, Run).
    It only ADDS columns/tables; it never deletes reels or payments. Safe to re-run.
    Do NOT re-run sql/schema.sql.
    (Still on V1.1? Run sql/migrate_v1_2_google_drive.sql first, then migrate_v1_3.sql.)
@@ -14,7 +14,7 @@ UPGRADING FROM V1.2 / V1.2.1 (your Supabase data is kept):
 5. Open http://localhost:3000 (client dashboard) and http://localhost:3000/login (admin).
 
 NEW SETUP:
-1. Supabase: run sql/schema.sql, then sql/migrate_v1_3.sql. Create the admin user under
+1. Supabase: run sql/schema.sql, then sql/migrate_v1_3.sql, then sql/migrate_v1_4.sql. Create the admin user under
    Authentication -> Users.
 2. Copy .env.example to .env.local and fill it in. Generate secrets with:
      node scripts/generate-secrets.mjs
@@ -24,8 +24,10 @@ NEW SETUP:
    Save folder, Sync now.
 
 DAILY USE:
-- New Drive uploads appear in admin as PENDING REVIEW and are not billed.
-- Tap "Mark delivered today" when a reel is delivered. Up to 60 s = Rs 600.
+- Upload to the Drive folder: the reel appears within ~30 s, auto-delivered on its upload date.
+  (Switch this off in admin -> Google Drive -> Automation to review each upload first.)
+- Delete a video from the folder: it's removed from the log and its charge disappears.
+- Mohit can tap "Report a payment" on the homepage with a screenshot; confirm it in admin.
 - Over 60 s shows "Pricing review required": enter a Confirmed price in Edit to bill it.
 - Record payments against their Monday-Sunday week; partial payments are fine.
 

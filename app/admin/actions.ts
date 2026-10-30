@@ -5,7 +5,7 @@ import { requireAdmin } from "@/lib/auth";
 import { serviceDb, userDb } from "@/lib/supabase";
 import { googleFolderId, validAmount, validDate, validDuration, validUrl, statuses, paymentMethods } from "@/lib/validation";
 import { BILLED_STATES, sundayFor, todayInIndia, withinStandardLength } from "@/lib/billing";
-import { syncGoogleDrive } from "@/lib/google-drive";
+import { ensureDriveWatch, stopDriveWatch, syncGoogleDrive } from "@/lib/google-drive";
 import type { ReelStatus } from "@/lib/models";
 
 function fail(error: unknown): never {
@@ -161,12 +161,15 @@ export async function syncNow() {
   let result;
   try { result = await syncGoogleDrive("manual"); }
   catch (error) { fail(error); }
-  if (result.skipped) success("A sync is already running. Refresh in a minute to see the results.", "#gdrive");
-  success(`Sync complete: ${result.imported} new, ${result.updated} refreshed, ${result.missing} no longer in the folder, ${result.scanned} videos scanned.`, "#gdrive");
+  if (result.skipped) success("A sync is already running; it will pick up any new changes. Refresh in a minute.", "#gdrive");
+  if (result.warning) fail(new Error(result.warning));
+  const parts = [`${result.imported} new`, result.delivered ? `${result.delivered} auto-delivered` : "", result.removed ? `${result.removed} removed (deleted from Drive)` : "", result.restored ? `${result.restored} restored` : "", `${result.scanned} videos scanned`].filter(Boolean);
+  success(`Sync complete: ${parts.join(", ")}.`, "#gdrive");
 }
 export async function disconnectGoogleDrive() {
   await requireAdmin();
   try {
+    await stopDriveWatch();
     const { error } = await serviceDb().from("google_drive_connection").delete().eq("id", 1);
     if (error) throw new Error("Unable to disconnect Google Drive.");
   } catch (error) { fail(error); }
@@ -176,4 +179,68 @@ export async function signOut() {
   const db = await userDb();
   await db.auth.signOut();
   redirect("/login");
+}
+
+/** Automation switches: auto-deliver new uploads, auto-remove deleted files. */
+export async function saveAutomation(form: FormData) {
+  await requireAdmin();
+  try {
+    const autoDeliver = form.get("auto_deliver") === "on";
+    const autoRemove = form.get("auto_remove") === "on";
+    const db = serviceDb();
+    const { data: current } = await db.from("app_settings").select("auto_deliver").eq("id", 1).single();
+    // Turning auto-delivery ON only applies to uploads from now on, never to files already waiting for review.
+    const patch: Record<string, unknown> = { auto_deliver: autoDeliver, auto_remove: autoRemove };
+    if (autoDeliver && current?.auto_deliver === false) patch.auto_deliver_since = new Date().toISOString();
+    const { error } = await db.from("app_settings").update(patch).eq("id", 1);
+    if (error) throw new Error("Could not save automation settings. Run sql/migrate_v1_4.sql in Supabase.");
+  } catch (error) { fail(error); }
+  success("Automation settings saved.", "#gdrive");
+}
+/** Re-register instant change notifications with Google (normally automatic). */
+export async function reconnectNotifications() {
+  await requireAdmin();
+  try { await ensureDriveWatch(undefined, true); }
+  catch (error) { fail(error); }
+  success("Instant sync is on: Google Drive will notify CrazifiedEdits of new uploads and deletions.", "#gdrive");
+}
+
+/** Confirm a client's payment report: records it as a payment for that week. */
+export async function confirmClaim(form: FormData) {
+  await requireAdmin();
+  let amountLabel = "";
+  try {
+    const id = uuid(field(form, "id"), "report");
+    const db = serviceDb();
+    // Claim the report first, so a double click can never record the payment twice.
+    const { data: claimed, error } = await db.from("payment_claims").update({ status: "confirmed", reviewed_at: new Date().toISOString() })
+      .eq("id", id).eq("status", "pending").select("*");
+    if (error) throw new Error("Could not confirm the report. Run sql/migrate_v1_4.sql in Supabase.");
+    const claim = claimed?.[0];
+    if (!claim) throw new Error("This report was already reviewed.");
+    const amount = field(form, "amount") ? validAmount(field(form, "amount"), "Amount") : Number(claim.amount);
+    const note = ["Reported by client", claim.reference ? `ref ${claim.reference}` : ""].filter(Boolean).join(" · ").slice(0, 500);
+    const base = { week_ending: claim.week_ending, paid_on: claim.paid_on, amount, note };
+    let { data: pay, error: payError } = await db.from("payments").insert({ ...base, method: claim.method }).select("id").single();
+    if (payError && /method/.test(payError.message)) ({ data: pay, error: payError } = await db.from("payments").insert(base).select("id").single());
+    if (payError || !pay) {
+      await db.from("payment_claims").update({ status: "pending", reviewed_at: null }).eq("id", id);
+      throw new Error("Could not record the payment. The report is still pending.");
+    }
+    await db.from("payment_claims").update({ payment_id: pay.id }).eq("id", id);
+    amountLabel = `₹${amount.toLocaleString("en-IN")}`;
+  } catch (error) { fail(error); }
+  success(`Payment of ${amountLabel} confirmed and added to that week.`, "#claims");
+}
+export async function rejectClaim(form: FormData) {
+  await requireAdmin();
+  try {
+    const id = uuid(field(form, "id"), "report");
+    const { data, error } = await serviceDb().from("payment_claims")
+      .update({ status: "rejected", reviewed_at: new Date().toISOString(), review_note: field(form, "review_note").slice(0, 300) || null })
+      .eq("id", id).eq("status", "pending").select("id");
+    if (error) throw new Error("Could not update the report.");
+    if (!data?.length) throw new Error("This report was already reviewed.");
+  } catch (error) { fail(error); }
+  success("Report marked as not received. It isn't counted in any balance.", "#claims");
 }
