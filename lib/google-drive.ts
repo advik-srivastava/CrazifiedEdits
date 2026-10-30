@@ -17,8 +17,12 @@ type ListResponse = { files?: DriveItem[]; nextPageToken?: string; incompleteSea
 type Profile = { name?: string; email?: string };
 
 export function googleConfig() {
-  const id = process.env.GOOGLE_CLIENT_ID?.trim(), secret = process.env.GOOGLE_CLIENT_SECRET?.trim(), redirect = process.env.GOOGLE_REDIRECT_URI?.trim();
+  // Tolerate copy-paste slips: surrounding whitespace or quotes.
+  const clean = (v?: string) => v?.trim().replace(/^["']|["']$/g, "").trim();
+  const id = clean(process.env.GOOGLE_CLIENT_ID), secret = clean(process.env.GOOGLE_CLIENT_SECRET), redirect = clean(process.env.GOOGLE_REDIRECT_URI);
   if (!id || !secret || !redirect || id.startsWith("YOUR_") || secret.startsWith("YOUR_")) throw new Error("Google Drive OAuth is not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET and GOOGLE_REDIRECT_URI.");
+  if (!/^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/.test(id)) throw new Error("GOOGLE_CLIENT_ID doesn't look like a Google OAuth Client ID (it should end in .apps.googleusercontent.com). Copy it again from Google Cloud → Google Auth Platform → Clients.");
+  if (id === secret) throw new Error("GOOGLE_CLIENT_SECRET is the same as the Client ID. Paste the Client secret instead.");
   if (!/^https:\/\//.test(redirect) && !/^http:\/\/localhost(?::\d+)?\//.test(redirect)) throw new Error("Google redirect URI must use HTTPS or localhost.");
   return { id, secret, redirect };
 }
