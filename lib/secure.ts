@@ -2,8 +2,11 @@ import "server-only";
 import { randomBytes, createCipheriv, createDecipheriv, createHash, timingSafeEqual } from "node:crypto";
 
 function key(): Buffer {
-  const hex = process.env.GOOGLE_TOKEN_ENCRYPTION_KEY || process.env.ONEDRIVE_ENCRYPTION_KEY;
-  if (!hex || !/^[a-f\d]{64}$/i.test(hex)) throw new Error("GOOGLE_TOKEN_ENCRYPTION_KEY must be 64 hex characters.");
+  const raw = process.env.GOOGLE_TOKEN_ENCRYPTION_KEY || process.env.ONEDRIVE_ENCRYPTION_KEY;
+  // Tolerate copy-paste slips: whitespace or quotes around the value.
+  const hex = raw?.trim().replace(/^["']|["']$/g, "").trim();
+  if (!hex) throw new Error("GOOGLE_TOKEN_ENCRYPTION_KEY is not set. Add it in Vercel → Settings → Environment Variables, then redeploy.");
+  if (!/^[a-f\d]{64}$/i.test(hex)) throw new Error(`GOOGLE_TOKEN_ENCRYPTION_KEY must be exactly 64 characters of 0-9 and a-f (yours has ${hex.length}). Generate one with: node scripts/generate-secrets.mjs`);
   return Buffer.from(hex, "hex");
 }
 export function encryptToken(plain: string): string {
