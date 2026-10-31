@@ -71,7 +71,7 @@ const invoices = [
   { id: "20000000-0000-4000-8000-000000000001", number: "CS-MS-01", kind: "weekly", period_start: mon(2), period_end: sun(2), issue_date: sun(2), due_date: d(-5), items: invItems(6, mon(2)), item_count: 6, total: 3600, profile: {}, notes: null, status: "issued", created_at: iso(sun(2)), voided_at: null }
 ];
 // Payments made through the invoices above.
-payments[0].invoice_id = invoices[0].id; payments[2].invoice_id = invoices[1].id;
+payments[0].invoice_id = invoices.find(i => i.number === "CS-MS-02").id; payments[2].invoice_id = invoices.find(i => i.number === "CS-MS-01").id;
 settings.invoice_profile = { upi_id: "example@upi", email: "studio@example.test" };
 const tables = { reels, payments, sync_events: events, payment_claims: claims, invoices };
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");

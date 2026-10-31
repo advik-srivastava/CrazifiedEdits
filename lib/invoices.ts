@@ -106,3 +106,18 @@ export function invoiceWeekEnding(periodEnd: string): string { return sundayFor(
 export function periodLabel(kind: InvoiceKind, start: string, end: string, fmt: (iso: string) => string): string {
   return kind === "daily" ? fmt(start) : `${fmt(start)} – ${fmt(end)}`;
 }
+
+/** The date an invoice became fully paid: the payment that brought the total paid up to the invoice total. */
+export function fullyPaidOn(total: number, payments: { amount: number; paid_on: string }[]): string | null {
+  let sum = 0;
+  for (const p of [...payments].sort((a, b) => a.paid_on.localeCompare(b.paid_on))) {
+    sum += Number(p.amount);
+    if (sum >= total - 0.005) return p.paid_on;
+  }
+  return null;
+}
+export type InvoiceHistoryTab = "recent" | "unpaid" | "paid" | "void";
+/** Which history tab an invoice belongs to (Recent shows everything, newest first). */
+export function historyTab(state: InvoicePayState): Exclude<InvoiceHistoryTab, "recent"> {
+  return state === "paid" ? "paid" : state === "void" ? "void" : "unpaid";
+}

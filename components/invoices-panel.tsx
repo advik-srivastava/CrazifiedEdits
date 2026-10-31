@@ -4,7 +4,7 @@ import { useFormStatus } from "react-dom";
 import { CalendarDays, CalendarRange, CheckCircle2, ChevronDown, Download, Eye, FileText, Settings2, Trash2, Wallet, XCircle } from "lucide-react";
 import type { WeekSummary } from "@/lib/models";
 import type { AdminInvoice } from "@/lib/invoices-server";
-import { payStateLabel, periodLabel, periodsOverlap, type InvoiceProfile } from "@/lib/invoices";
+import { historyTab, payStateLabel, periodLabel, periodsOverlap, type InvoiceHistoryTab, type InvoiceProfile } from "@/lib/invoices";
 import { CALENDAR_END, CALENDAR_START, formatINR, prettyDate, sundayFor, weekYear } from "@/lib/billing";
 import { paymentMethods } from "@/lib/validation";
 import { deleteVoidInvoice, generateInvoice, recordInvoicePayment, saveInvoiceDetails, voidInvoice } from "@/app/admin/actions";
@@ -71,8 +71,8 @@ function InvoiceRow({ inv }: { inv: AdminInvoice }) {
   return <details className={`invoice-item invoice-${inv.state}`}>
     <summary>
       <span className="invoice-icon"><FileText size={20} aria-hidden /></span>
-      <span className="invoice-main"><strong>{inv.number}</strong><small>{inv.kind === "weekly" ? "Weekly" : "Daily"} · {periodLabel(inv.kind, inv.period_start, inv.period_end, prettyDate)} · {inv.item_count} reel{inv.item_count === 1 ? "" : "s"}</small></span>
-      <span className="invoice-amounts"><strong>{formatINR(inv.total)}</strong><small>{inv.state === "void" ? (inv.replacedBy ? `Replaced by ${inv.replacedBy}` : "Void") : inv.balance > 0 ? `${formatINR(inv.balance)} due` : "Settled"}</small></span>
+      <span className="invoice-main"><strong>{inv.number}</strong><small>{inv.kind === "weekly" ? "Weekly" : "Daily"} · {periodLabel(inv.kind, inv.period_start, inv.period_end, prettyDate)} · {inv.item_count} reel{inv.item_count === 1 ? "" : "s"} · issued {prettyDate(inv.issue_date)}</small></span>
+      <span className="invoice-amounts"><strong>{formatINR(inv.total)}</strong><small>{inv.state === "paid" && inv.paidOn ? `Paid ${prettyDate(inv.paidOn)}` : inv.state === "void" ? (inv.replacedBy ? `Replaced by ${inv.replacedBy}` : "Void") : inv.balance > 0 ? `${formatINR(inv.balance)} due` : "Settled"}</small></span>
       <Pill tone={tone[inv.state]}>{payStateLabel[inv.state]}</Pill>
     </summary>
     <div className="invoice-pane">
@@ -131,9 +131,20 @@ function ProfileForm({ profile }: { profile: InvoiceProfile }) {
   </details>;
 }
 
-export function InvoicesPanel({ invoices, profile, today, ready, weeks, todayCount, todayBilled }: { invoices: AdminInvoice[]; profile: InvoiceProfile; today: string; ready: boolean; weeks: WeekSummary[]; todayCount: number; todayBilled: number }) {
+export function InvoicesPanel({ invoices: incoming, profile, today, ready, weeks, todayCount, todayBilled }: { invoices: AdminInvoice[]; profile: InvoiceProfile; today: string; ready: boolean; weeks: WeekSummary[]; todayCount: number; todayBilled: number }) {
   const [shown, setShown] = useState(10);
+  const [tab, setTab] = useState<InvoiceHistoryTab>("recent");
+  // Newest generated first, whatever order the data arrives in.
+  const invoices = useMemo(() => [...incoming].sort((a, b) => b.created_at.localeCompare(a.created_at) || b.number.localeCompare(a.number)), [incoming]);
   const due = invoices.filter(i => i.state === "unpaid" || i.state === "partial").reduce((s, i) => s + i.balance, 0);
+  const live = invoices.filter(i => i.state !== "void");
+  const invoiced = live.reduce((s, i) => s + i.total, 0), paidTotal = live.reduce((s, i) => s + i.paid, 0);
+  const count = (t: InvoiceHistoryTab) => t === "recent" ? invoices.length : invoices.filter(i => historyTab(i.state) === t).length;
+  // Recent: every invoice, newest generated first. Paid: most recently paid first.
+  const list = tab === "recent" ? invoices
+    : invoices.filter(i => historyTab(i.state) === tab).sort((a, b) => tab === "paid" ? (b.paidOn || "").localeCompare(a.paidOn || "") || b.created_at.localeCompare(a.created_at) : b.created_at.localeCompare(a.created_at));
+  const last = invoices[0];
+  const tabs: [InvoiceHistoryTab, string][] = [["recent", "Recent"], ["unpaid", "Unpaid"], ["paid", "Paid"], ["void", "Void"]];
   return <section className="surface invoices-panel" id="invoices">
     <div className="section-top"><SectionHeading eyebrow="BILLING" title="Invoices" description="PDF invoices (no GST), weekly by default. Download and send them to Mohit; record payments against them here." />{due > 0 && <Pill tone="orange">{formatINR(due)} due</Pill>}</div>
     {!ready && <div className="small-alert" role="alert">Run <code>sql/migrate_v1_5.sql</code> in the Supabase SQL Editor to enable invoices.</div>}
@@ -147,8 +158,20 @@ export function InvoicesPanel({ invoices, profile, today, ready, weeks, todayCou
         <div className="wide align-end"><Submit pending="Generating…"><FileText size={16} aria-hidden /> Generate invoice</Submit></div>
       </form>
     </details>
-    {invoices.length ? <div className="invoice-list">{invoices.slice(0, shown).map(inv => <InvoiceRow key={inv.id} inv={inv} />)}
-      {invoices.length > shown && <button type="button" className="button secondary load-more-payments" onClick={() => setShown(n => n + 20)}>Show more ({invoices.length - shown} remaining)</button>}</div>
+    {invoices.length > 0 && <div className="invoice-history-head">
+      <div className="eyebrow">INVOICE HISTORY</div>
+      <div className="invoice-stats">
+        <span><small>Invoices generated</small><strong>{live.length}</strong></span>
+        <span><small>Total invoiced</small><strong>{formatINR(invoiced)}</strong></span>
+        <span><small>Paid</small><strong className="green-text">{formatINR(paidTotal)}</strong></span>
+        <span><small>Outstanding</small><strong>{formatINR(due)}</strong></span>
+      </div>
+      {last && <p className="muted mini-note">Last generated: <strong>{last.number}</strong> on {prettyDate(last.issue_date)} ({last.kind === "weekly" ? "week" : "day"} {periodLabel(last.kind, last.period_start, last.period_end, prettyDate)}) · {payStateLabel[last.state]}</p>}
+      <div className="invoice-tabs" role="tablist" aria-label="Invoice history">{tabs.map(([id, label]) => <button key={id} type="button" role="tab" aria-selected={tab === id} className={`invoice-tab ${tab === id ? "active" : ""}`} onClick={() => { setTab(id); setShown(10); }}>{label} <span>{count(id)}</span></button>)}</div>
+    </div>}
+    {invoices.length ? (list.length ? <div className="invoice-list">{list.slice(0, shown).map(inv => <InvoiceRow key={inv.id} inv={inv} />)}
+      {list.length > shown && <button type="button" className="button secondary load-more-payments" onClick={() => setShown(n => n + 20)}>Show more ({list.length - shown} remaining)</button>}</div>
+      : <p className="activity-empty">{tab === "paid" ? "No invoices fully paid yet." : tab === "unpaid" ? "Nothing outstanding. Every invoice is paid." : "No void invoices."}</p>)
       : <Empty title="No invoices yet" description="Choose a week above and generate its invoice. Only delivered, priced reels are included." icon={<FileText />} />}
     <ProfileForm profile={profile} />
   </section>;

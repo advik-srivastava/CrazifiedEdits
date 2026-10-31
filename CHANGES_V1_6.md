@@ -8,3 +8,4 @@
 - **Numbers `CS-MS-01`, `CS-MS-02`…** (Crazified Studios → Mohit Sharma); the PDF file is named `CS-MS-01.pdf`. Existing `CE-2026-…` invoices are renumbered into the series by the migration. The prefix is editable in Invoice details; the client name now defaults to Mohit Sharma.
 - Void invoices that were never sent can be deleted (frees the latest number).
 - Clearer message when a period has nothing to invoice (e.g. reels still pending review).
+- **Invoice history**: totals, last generated invoice, and Recent / Unpaid / Paid / Void tabs in admin; paid date on every paid invoice (admin and client). All invoices are kept; the client page shows the latest 8 with older ones expandable.

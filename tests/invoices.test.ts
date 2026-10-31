@@ -3,6 +3,7 @@ import test from "node:test";
 import fs from "node:fs";
 import { PDFDocument } from "pdf-lib";
 import {
+  fullyPaidOn, historyTab,
   DEFAULT_PROFILE, dueDate, formatInvoiceNumber, invoiceItems, invoicePayState, invoicePeriod, invoiceWeekEnding,
   nextInvoiceNumber, normalizeProfile, periodsOverlap
 } from "../lib/invoices";
@@ -118,4 +119,13 @@ test("a weekly invoice totals exactly what the weekly log bills for that week", 
   assert.equal(inv.items.length, week.count); assert.equal(inv.total, week.billed);
   assert.equal(inv.total, 3600, "all six reels in the week, not just today's five");
   assert.equal(invoiceItems(reels, "2026-10-31", "2026-10-31").total, 3000, "today's invoice: only reels delivered today");
+});
+
+test("invoice history: fully-paid date and tabs", () => {
+  assert.equal(fullyPaidOn(3600, []), null);
+  assert.equal(fullyPaidOn(3600, [{ amount: 3000, paid_on: "2026-11-02" }]), null, "part-paid has no paid date");
+  assert.equal(fullyPaidOn(3600, [{ amount: 600, paid_on: "2026-11-05" }, { amount: 3000, paid_on: "2026-11-02" }]), "2026-11-05", "date of the payment that completed it");
+  assert.equal(fullyPaidOn(600, [{ amount: 600, paid_on: "2026-11-01" }, { amount: 50, paid_on: "2026-11-03" }]), "2026-11-01");
+  assert.equal(historyTab("paid"), "paid"); assert.equal(historyTab("partial"), "unpaid");
+  assert.equal(historyTab("unpaid"), "unpaid"); assert.equal(historyTab("void"), "void");
 });

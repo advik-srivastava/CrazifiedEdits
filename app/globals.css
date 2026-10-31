@@ -419,3 +419,18 @@ ul.mobile-delivery-list,ul.payments-list,.activity-list,.sync-log ul{list-style:
 .week-invoice-bar>span{flex:1;min-width:0}
 .week-invoice-bar.done{border-style:solid;border-color:#cdeedd;background:#f3fbf7;color:#07865c}
 @media(max-width:760px){.weekly-invoice-go .button,.week-invoice-bar .button,.weekly-invoice-done .button{width:100%}}
+/* Invoice history */
+.invoice-history-head{margin-top:18px;padding-top:16px;border-top:1px solid var(--border)}
+.invoice-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:10px 0}
+.invoice-stats span{border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;min-width:0}
+.invoice-stats small{font-size:11px;color:#7d8495;font-weight:700}
+.invoice-stats strong{font-family:Manrope,sans-serif;font-size:17px;font-weight:800;overflow-wrap:anywhere}
+.invoice-tabs{display:flex;gap:6px;background:#f3f4f8;border-radius:12px;padding:4px;margin-top:10px;overflow-x:auto}
+.invoice-tab{flex:1;min-height:44px;border:0;background:transparent;border-radius:9px;font-weight:800;font-size:13px;color:#6c7385;white-space:nowrap;padding:0 12px}
+.invoice-tab span{display:inline-block;min-width:20px;padding:1px 6px;margin-left:4px;border-radius:99px;background:#e6e7ee;font-size:11px}
+.invoice-tab.active{background:#fff;color:var(--ink);box-shadow:0 2px 8px #1721531a}
+.invoice-tab.active span{background:#ece9ff;color:var(--primary)}
+@media(max-width:760px){.invoice-stats{grid-template-columns:1fr 1fr}}
+.invoice-older>summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-weight:750;font-size:13px;color:var(--primary);border-top:1px solid #f0f1f5}
+.invoice-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:visible}
+@media(max-width:470px){.invoice-tab{padding:0 4px;font-size:12px}.invoice-tab span{margin-left:2px;padding:1px 5px}}

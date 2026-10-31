@@ -7,7 +7,7 @@ import { getReels } from "./data";
 import { todayInIndia } from "./billing";
 import { opaqueKey } from "./public-ledger";
 import {
-  dueDate, invoiceItems, invoicePayState, invoicePeriod, nextInvoiceNumber, normalizeProfile, periodsOverlap,
+  dueDate, fullyPaidOn, invoiceItems, invoicePayState, invoicePeriod, nextInvoiceNumber, normalizeProfile, periodsOverlap,
   type InvoiceItem, type InvoiceKind, type InvoicePayState, type InvoiceProfile
 } from "./invoices";
 import { renderInvoicePdf } from "./invoice-pdf";
@@ -19,8 +19,8 @@ export type InvoiceRow = {
   items: InvoiceItem[]; item_count: number; total: number; profile: InvoiceProfile; notes: string | null; status: "issued" | "void";
   created_at: string; voided_at: string | null; superseded_by?: string | null;
 };
-export type AdminInvoice = Omit<InvoiceRow, "items" | "profile"> & { replacedBy: string | null; paid: number; balance: number; state: InvoicePayState; payments: { id: string; amount: number; paid_on: string; method: string | null }[] };
-export type PublicInvoice = { key: string; number: string; kind: InvoiceKind; period_start: string; period_end: string; issue_date: string; due_date: string; total: number; paid: number; state: InvoicePayState };
+export type AdminInvoice = Omit<InvoiceRow, "items" | "profile"> & { replacedBy: string | null; paidOn: string | null; paid: number; balance: number; state: InvoicePayState; payments: { id: string; amount: number; paid_on: string; method: string | null }[] };
+export type PublicInvoice = { key: string; number: string; kind: InvoiceKind; period_start: string; period_end: string; issue_date: string; due_date: string; total: number; paid: number; paidOn: string | null; state: InvoicePayState };
 
 const round = (n: number) => Math.round(n * 100) / 100;
 
@@ -50,7 +50,7 @@ function summarize(row: InvoiceRow, payments: { id: string; amount: number; paid
 }
 
 /** Invoices for the admin, newest first, with what's been paid through each. [] before the migration. */
-export async function getInvoicesForAdmin(limit = 60): Promise<AdminInvoice[]> {
+export async function getInvoicesForAdmin(limit = 1000): Promise<AdminInvoice[]> {
   noStore();
   const { data, error } = await serviceDb().from("invoices")
     .select("*")
@@ -59,10 +59,10 @@ export async function getInvoicesForAdmin(limit = 60): Promise<AdminInvoice[]> {
   const rows = data as InvoiceRow[];
   const pays = await paymentsByInvoice(rows.map(r => r.id));
   const numberOf = new Map(rows.map(r => [r.id, r.number]));
-  return rows.map(r => { const p = pays.get(r.id) || []; const s = summarize(r, p); const { items: _i, profile: _p, ...rest } = r; void _i; void _p; return { ...rest, total: s.total, paid: s.paid, balance: s.balance, state: s.state, payments: p, replacedBy: r.superseded_by ? numberOf.get(r.superseded_by) ?? null : null }; });
+  return rows.map(r => { const p = pays.get(r.id) || []; const s = summarize(r, p); const { items: _i, profile: _p, ...rest } = r; void _i; void _p; return { ...rest, total: s.total, paid: s.paid, balance: s.balance, state: s.state, payments: p, paidOn: s.state === "paid" ? fullyPaidOn(s.total, p) : null, replacedBy: r.superseded_by ? numberOf.get(r.superseded_by) ?? null : null }; });
 }
 /** What the client page shows: number, period, dates, total, paid and status. No line items, notes or IDs. */
-export async function getPublicInvoices(limit = 30): Promise<PublicInvoice[]> {
+export async function getPublicInvoices(limit = 200): Promise<PublicInvoice[]> {
   noStore();
   const { data, error } = await serviceDb().from("invoices")
     .select("id,number,kind,period_start,period_end,issue_date,due_date,total,status")
@@ -71,8 +71,9 @@ export async function getPublicInvoices(limit = 30): Promise<PublicInvoice[]> {
   const rows = data as InvoiceRow[];
   const pays = await paymentsByInvoice(rows.map(r => r.id));
   return rows.map(r => {
-    const s = summarize(r, pays.get(r.id) || []);
-    return { key: opaqueKey(r.id), number: r.number, kind: r.kind, period_start: r.period_start, period_end: r.period_end, issue_date: r.issue_date, due_date: r.due_date, total: s.total, paid: s.paid, state: s.state };
+    const p = pays.get(r.id) || [];
+    const s = summarize(r, p);
+    return { paidOn: s.state === "paid" ? fullyPaidOn(s.total, p) : null, key: opaqueKey(r.id), number: r.number, kind: r.kind, period_start: r.period_start, period_end: r.period_end, issue_date: r.issue_date, due_date: r.due_date, total: s.total, paid: s.paid, state: s.state };
   });
 }
 
