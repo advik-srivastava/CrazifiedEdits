@@ -1,6 +1,8 @@
 "use client";
 import { useMemo, useState } from "react";
-import { ArrowUpRight, CalendarDays, Clapperboard, CreditCard, Wallet, CheckCircle2, Video, ChevronDown, ChevronLeft, ChevronRight, AlertCircle, Hourglass } from "lucide-react";
+import { useFormStatus } from "react-dom";
+import { generateInvoice } from "@/app/admin/actions";
+import { ArrowUpRight, CalendarDays, Clapperboard, CreditCard, Wallet, CheckCircle2, Video, ChevronDown, ChevronLeft, ChevronRight, AlertCircle, Hourglass, FileText, Download } from "lucide-react";
 import type { LedgerReel, WeekSummary } from "@/lib/models";
 import { CALENDAR_END, CALENDAR_START, durationLabel, formatINR, prettyDate, pricingState, reelFee, sundayFor, todayInIndia, weekStatus, weekStatusLabel, weekYear } from "@/lib/billing";
 import { Empty, Pill, SectionHeading, StatCard, Status } from "./ui";
@@ -40,7 +42,22 @@ function WeekReels({ week }: { week: WeekSummary }) {
     </li>)}</ul>
   </>;
 }
-export function WeekLedger({ weeks, clientView = false }: { weeks: WeekSummary[]; clientView?: boolean }) {
+/** Admin only: weekly invoices by week ending, so the selected week can be invoiced from the log. */
+export type WeekInvoiceLink = { id: string; number: string; state: string };
+function WeekInvoiceBar({ week, invoice }: { week: WeekSummary; invoice?: WeekInvoiceLink }) {
+  if (invoice) return <div className="week-invoice-bar done"><FileText size={16} aria-hidden /><span>Invoice <strong>{invoice.number}</strong> · {invoice.state}</span><a className="button secondary" href={`/api/invoices/${invoice.id}/pdf`}><Download size={15} aria-hidden /> {invoice.number}.pdf</a></div>;
+  if (week.count === 0 || week.starting > todayInIndia()) return null;
+  return <form action={generateInvoice} className="week-invoice-bar">
+    <input type="hidden" name="kind" value="weekly" /><input type="hidden" name="date" value={week.starting} />
+    <FileText size={16} aria-hidden /><span>{week.count} billed reel{week.count === 1 ? "" : "s"} · {formatINR(week.billed)} not invoiced yet</span>
+    <InvoiceSubmit />
+  </form>;
+}
+function InvoiceSubmit() {
+  const { pending } = useFormStatus();
+  return <button type="submit" className="button primary" disabled={pending} aria-busy={pending}>{pending ? "Generating…" : "Generate weekly invoice"}</button>;
+}
+export function WeekLedger({ weeks, clientView = false, weekInvoices }: { weeks: WeekSummary[]; clientView?: boolean; weekInvoices?: Record<string, WeekInvoiceLink> }) {
   const current = sundayFor(todayInIndia());
   const ordered = useMemo(() => [...weeks].sort((a, b) => a.ending.localeCompare(b.ending)), [weeks]);
   const [end, setEnd] = useState(weeks.some(w => w.ending === current) ? current : weeks[0]?.ending || "");
@@ -71,6 +88,7 @@ export function WeekLedger({ weeks, clientView = false }: { weeks: WeekSummary[]
       </div>
     </div>
     <p className="week-range-announce" aria-live="polite">{prettyDate(selected.starting)} – {prettyDate(selected.ending)} · <span className={`week-status week-status-${status}`}>{weekStatusLabel[status]}</span>{selected.reported.some(c => c.status === "pending") && <span className="week-status week-status-reported">Payment reported</span>}</p>
+    {weekInvoices && <WeekInvoiceBar week={selected} invoice={weekInvoices[selected.ending]} />}
     <div className="stats-grid"><StatCard label="Reels delivered" value={selected.delivered} icon={<Clapperboard size={19} />} detail={selected.reviewCount ? `${selected.count} billed · ${selected.reviewCount} in pricing review` : `${selected.count} billed this week`} /><StatCard label="Amount billed" value={formatINR(selected.billed)} icon={<CreditCard size={19} />} detail="₹600 per reel up to 60 s" /><StatCard label="Amount received" value={formatINR(selected.received)} icon={<CheckCircle2 size={19} />} detail={`${selected.payments.length} payment${selected.payments.length === 1 ? "" : "s"} this week`} /><StatCard label={credit ? "Credit" : "Balance due"} value={formatINR(Math.abs(selected.due))} icon={<Wallet size={19} />} detail={weekStatusLabel[status]} featured /></div>
     <div className="content-grid"><section className="surface chart-card"><SectionHeading eyebrow="EARNINGS" title="Weekly performance" description="Eight billing weeks ending at the selected week" />
       <div className="bar-chart" role="group" aria-label="Eight-week billing chart">{chartWeeks.map(w => <button key={w.ending} type="button" title={`${prettyDate(w.ending)} • ${formatINR(w.billed)}`} onClick={() => setEnd(w.ending)} className={`bar-column ${selected.ending === w.ending ? "selected" : ""}`} aria-pressed={selected.ending === w.ending} aria-label={`Week ending ${prettyDate(w.ending)}, billed ${formatINR(w.billed)}`}>

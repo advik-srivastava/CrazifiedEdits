@@ -34,11 +34,19 @@ test("invoice lines: only billed reels delivered in the period, ₹600 rule and 
   assert.equal(invoiceItems(reels, "2026-10-27", "2026-10-27").total, 1200, "daily invoice");
   assert.equal(invoiceItems(reels, "2026-11-09", "2026-11-15").items.length, 0);
 });
-test("invoice numbers are sequential per year and never reused", () => {
-  assert.equal(formatInvoiceNumber(2026, 7), "CE-2026-0007");
-  assert.equal(nextInvoiceNumber([], 2026), "CE-2026-0001");
-  assert.equal(nextInvoiceNumber(["CE-2026-0001", "CE-2026-0009", "CE-2025-0040"], 2026), "CE-2026-0010", "gaps from voided invoices are kept");
-  assert.equal(nextInvoiceNumber(["CE-2026-0012"], 2027), "CE-2027-0001");
+test("invoice numbers: CS-MS-01, CS-MS-02… in one running series", () => {
+  assert.equal(formatInvoiceNumber("CS-MS", 1), "CS-MS-01");
+  assert.equal(formatInvoiceNumber("CS-MS", 123), "CS-MS-123");
+  assert.equal(nextInvoiceNumber([], "CS-MS"), "CS-MS-01");
+  assert.equal(nextInvoiceNumber(["CS-MS-01", "CS-MS-09", "CE-2026-0040", "CS-MSX-50"], "CS-MS"), "CS-MS-10", "other series are ignored");
+  assert.equal(nextInvoiceNumber(["CS-MS-99"], "CS-MS"), "CS-MS-100");
+});
+test("invoice prefix: defaults to CS-MS, cleaned to letters/digits/dashes", () => {
+  assert.equal(normalizeProfile({}).invoice_prefix, "CS-MS");
+  assert.equal(normalizeProfile({ invoice_prefix: " cs-ms " }).invoice_prefix, "CS-MS");
+  assert.equal(normalizeProfile({ invoice_prefix: "CS / MS" }).invoice_prefix, "CSMS");
+  assert.equal(normalizeProfile({ invoice_prefix: "-" }).invoice_prefix, "CS-MS");
+  assert.equal(normalizeProfile({}).client_name, "Mohit Sharma");
 });
 test("overlap protection: a day inside an invoiced week, and the week containing an invoiced day", () => {
   const week = invoicePeriod("weekly", "2026-10-28");
@@ -74,7 +82,7 @@ const assets = () => {
   return { regular: f("assets/fonts/DMSans_400Regular.ttf"), bold: f("assets/fonts/DMSans_700Bold.ttf"), heavy: f("assets/fonts/Manrope_800ExtraBold.ttf"), logo: f("public/images/crazified-logo.png") };
 };
 const data = (n: number, paid = 0) => ({
-  number: "CE-2026-0001", kind: "weekly" as const, period_start: "2026-10-26", period_end: "2026-11-01", issue_date: "2026-11-01", due_date: "2026-11-08",
+  number: "CS-MS-01", kind: "weekly" as const, period_start: "2026-10-26", period_end: "2026-11-01", issue_date: "2026-11-01", due_date: "2026-11-08",
   items: Array.from({ length: n }, (_, i) => ({ title: `Reel ${i + 1} 🔥 with ₹ in the name`, delivered: "2026-10-28", seconds: 45, amount: 600 })),
   total: n * 600, paid, profile: normalizeProfile({ upi_id: "advik@upi" }), notes: null, voided: false
 });
@@ -85,7 +93,7 @@ test("PDF: valid A4 document, one page for a normal week", async () => {
   assert.equal(doc.getPageCount(), 1);
   const { width, height } = doc.getPage(0).getSize();
   assert.ok(Math.abs(width - 595.28) < 1 && Math.abs(height - 841.89) < 1);
-  assert.equal(doc.getTitle(), "Invoice CE-2026-0001");
+  assert.equal(doc.getTitle(), "Invoice CS-MS-01");
 });
 test("PDF: long weeks flow onto extra pages; emoji in titles don't break it", async () => {
   const doc = await PDFDocument.load(await renderInvoicePdf(data(60), assets()));
@@ -94,4 +102,20 @@ test("PDF: long weeks flow onto extra pages; emoji in titles don't break it", as
 test("PDF: renders paid and void invoices, and works without a logo", async () => {
   await renderInvoicePdf(data(2, 1200), assets());
   await renderInvoicePdf({ ...data(2), voided: true }, { ...assets(), logo: null });
+});
+
+test("a weekly invoice totals exactly what the weekly log bills for that week", async () => {
+  const { buildLedger } = await import("../lib/billing");
+  const { adminLedgerReel } = await import("../lib/public-ledger");
+  const reels = [
+    reel({ id: "1", title: "1_Mohit.mp4", delivery_date: "2026-10-30" }),
+    ...[2, 3, 4, 5, 6].map(n => reel({ id: String(n), title: `${n}_Mohit.mp4`, delivery_date: "2026-10-31" })),
+    reel({ id: "7", delivery_date: "2026-10-31", duration_seconds: 80 }),                         // awaiting price
+    reel({ id: "8", delivery_date: "2026-10-31", status: "cancelled", deleted_at: "2026-10-31" }) // deleted
+  ];
+  const week = buildLedger(reels.filter(r => r.delivery_date).map(adminLedgerReel), [], "2026-10-31").find(w => w.ending === "2026-11-01")!;
+  const inv = invoiceItems(reels, "2026-10-26", "2026-11-01");
+  assert.equal(inv.items.length, week.count); assert.equal(inv.total, week.billed);
+  assert.equal(inv.total, 3600, "all six reels in the week, not just today's five");
+  assert.equal(invoiceItems(reels, "2026-10-31", "2026-10-31").total, 3000, "today's invoice: only reels delivered today");
 });

@@ -9,6 +9,7 @@ import { getClaimsForAdmin } from "@/lib/claims-server";
 import { ClaimsPanel } from "@/components/claims-panel";
 import { InvoicesPanel } from "@/components/invoices-panel";
 import { getInvoiceProfile, getInvoicesForAdmin, invoicesReady } from "@/lib/invoices-server";
+import { payStateLabel } from "@/lib/invoices";
 import { isConfigured } from "@/lib/supabase";
 import { Header, OverviewTotals, Pill } from "@/components/ui";
 import { WeekLedger, UnpricedReels } from "@/components/week-ledger";
@@ -62,11 +63,11 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       <OverviewTotals totals={dashboard.totals} />
       <ActivityPanel daily={dashboard.daily} sync={sync} />
       <UnpricedReels reels={dashboard.reels.filter(r => r.delivery_date).map(adminLedgerReel)} />
-      <WeekLedger weeks={dashboard.weeks} />
+      <WeekLedger weeks={dashboard.weeks} weekInvoices={Object.fromEntries(invoices.filter(i => i.kind === "weekly" && i.status === "issued").map(i => [i.period_end, { id: i.id, number: i.number, state: payStateLabel[i.state] }]))} />
       <div className="admin-section-head"><div><div className="eyebrow">YOUR CONTROL CENTER</div><h2>Manage deliveries</h2><p>Connect Google Drive, review new uploads, mark deliveries and record Mohit&apos;s payments. The homepage shows only delivered reels and weekly settlements.</p></div><a href="#reels" className="button secondary"><Video size={16} aria-hidden />Review videos</a></div>
       <div className="admin-two-col"><GoogleDrivePanel settings={settings} connection={connection} events={events} syncInProgress={syncRunning(settings.sync_lock_until)} instant={!webhookAddress() ? "unavailable" : watchActive(settings.watch_expires_at) ? "on" : "off"} /><AddReelForm /></div>
       <AdminReelList reels={dashboard.reels} />
-      <InvoicesPanel invoices={invoices} profile={profile} today={todayInIndia()} ready={ready} />
+      <InvoicesPanel invoices={invoices} profile={profile} today={todayInIndia()} ready={ready} weeks={dashboard.weeks} todayCount={dashboard.daily.today.delivered} todayBilled={dashboard.daily.today.billed} />
       <ClaimsPanel claims={claims} />
       <div className="admin-two-col lower"><PaymentEntry payments={dashboard.payments} /><section className="surface sharing-panel"><div className="eyebrow">CLIENT ACCESS</div><h2>Share the live ledger</h2><p>Mohit can open the homepage to see delivered reels, Drive links and payments without signing in. Only you can edit records.</p><ClientLink url={clientUrl} /><div className="sharing-note"><ShieldCheck size={17} aria-hidden /><span>The homepage is public to anyone with the URL and is hidden from search engines. It never shows notes, payment references, pending uploads or account settings. Google Drive files still follow their own Drive sharing settings.</span></div></section></div>
       <footer className="app-footer"><span>© {todayInIndia().slice(0, 4)} Crazified Studios • Edited by Advik</span><span>Monday–Sunday billing · ₹600 per reel up to 60 s</span></footer>

@@ -66,8 +66,9 @@ const claims = [
 export const received = [];
 const invItems = (n, date) => Array.from({ length: n }, (_, i) => ({ title: `Weekly reel ${i + 1} — fitness series.mp4`, delivered: date, seconds: 40 + i, amount: 600 }));
 const invoices = [
-  { id: "20000000-0000-4000-8000-000000000002", number: "CE-2026-0002", kind: "weekly", period_start: mon(1), period_end: sun(1), issue_date: sun(1), due_date: d(1), items: invItems(9, mon(1)), item_count: 9, total: 5400, profile: { upi_id: "example@upi" }, notes: null, status: "issued", created_at: iso(sun(1)), voided_at: null },
-  { id: "20000000-0000-4000-8000-000000000001", number: "CE-2026-0001", kind: "weekly", period_start: mon(2), period_end: sun(2), issue_date: sun(2), due_date: d(-5), items: invItems(6, mon(2)), item_count: 6, total: 3600, profile: {}, notes: null, status: "issued", created_at: iso(sun(2)), voided_at: null }
+  { id: "20000000-0000-4000-8000-000000000002", number: "CS-MS-02", kind: "weekly", period_start: mon(1), period_end: sun(1), issue_date: sun(1), due_date: d(1), items: invItems(9, mon(1)), item_count: 9, total: 5400, profile: { upi_id: "example@upi" }, notes: null, status: "issued", created_at: iso(sun(1)), voided_at: null },
+  { id: "20000000-0000-4000-8000-000000000003", number: "CS-MS-03", kind: "daily", period_start: today, period_end: today, issue_date: today, due_date: d(7), items: invItems(2, today), item_count: 2, total: 1200, profile: {}, notes: null, status: "issued", created_at: iso(today), voided_at: null },
+  { id: "20000000-0000-4000-8000-000000000001", number: "CS-MS-01", kind: "weekly", period_start: mon(2), period_end: sun(2), issue_date: sun(2), due_date: d(-5), items: invItems(6, mon(2)), item_count: 6, total: 3600, profile: {}, notes: null, status: "issued", created_at: iso(sun(2)), voided_at: null }
 ];
 // Payments made through the invoices above.
 payments[0].invoice_id = invoices[0].id; payments[2].invoice_id = invoices[1].id;

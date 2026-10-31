@@ -400,3 +400,22 @@ ul.mobile-delivery-list,ul.payments-list,.activity-list,.sync-log ul{list-style:
   .invoice-actions .button{flex:1 1 140px}
   .invoice-pay-form .button{width:100%}
 }
+/* Weekly invoice (primary) */
+.weekly-invoice{border:1px solid #d9d4ff;border-radius:16px;padding:16px;background:linear-gradient(135deg,#f6f4ff,#fff);margin:6px 0 12px}
+.weekly-invoice-head{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.weekly-invoice-head>svg{color:var(--primary)}
+.weekly-invoice-head>span{display:flex;flex-direction:column}.weekly-invoice-head strong{font-size:15px}.weekly-invoice-head small{color:#7d8495;font-size:12px}
+.invoice-pickers{margin-bottom:12px}
+.weekly-invoice-summary{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:#4a5064;margin-bottom:12px}
+.weekly-invoice-summary strong{font-family:Manrope,sans-serif;font-size:17px;color:var(--ink)}
+.weekly-invoice-go{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.weekly-invoice-go input{flex:1 1 220px;min-height:44px;border:1px solid var(--border);border-radius:10px;padding:0 12px;background:#fff}
+.weekly-invoice-go small{flex-basis:100%}
+.weekly-invoice-done{display:flex;flex-wrap:wrap;align-items:center;gap:10px;color:#07865c;font-weight:700;font-size:13px}
+.weekly-invoice-done span{flex:1;min-width:0}
+.replaced-note{color:#a86f12;font-weight:700;margin:10px 0 0}
+.week-invoice-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:-6px 0 16px;padding:10px 12px;border:1px dashed #cfc8ff;border-radius:12px;background:#faf9ff;font-size:13px;color:#4a5064}
+.week-invoice-bar>svg{color:var(--primary)}
+.week-invoice-bar>span{flex:1;min-width:0}
+.week-invoice-bar.done{border-style:solid;border-color:#cdeedd;background:#f3fbf7;color:#07865c}
+@media(max-width:760px){.weekly-invoice-go .button,.week-invoice-bar .button,.weekly-invoice-done .button{width:100%}}

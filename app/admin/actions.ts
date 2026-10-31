@@ -274,7 +274,7 @@ export async function generateInvoice(form: FormData) {
     if (!validDate(date)) throw new Error("Choose a valid date.");
     if (date > todayInIndia() && kind === "daily") throw new Error("You can't invoice a day that hasn't happened yet.");
     const invoice = await createInvoice(kind, date, field(form, "notes").slice(0, 1000) || null);
-    message = `Invoice ${invoice.number} created: ${invoice.item_count} reel${invoice.item_count === 1 ? "" : "s"}, ₹${Number(invoice.total).toLocaleString("en-IN")}. Download the PDF below.`;
+    message = `Invoice ${invoice.number} created: ${invoice.item_count} reel${invoice.item_count === 1 ? "" : "s"}, ₹${Number(invoice.total).toLocaleString("en-IN")}.${invoice.replaced.length ? ` It replaces daily invoice${invoice.replaced.length === 1 ? "" : "s"} ${invoice.replaced.join(", ")} (now void).` : ""} Download the PDF below.`;
   } catch (error) { fail(error); }
   success(message, "#invoices");
 }
@@ -321,6 +321,20 @@ export async function voidInvoice(form: FormData) {
     if (!data?.length) throw new Error("This invoice is already void.");
   } catch (error) { fail(error); }
   success("Invoice voided. You can now create a new one for that period.", "#invoices");
+}
+/** Remove a void invoice that was never sent (e.g. a test). Frees its number if it was the latest one. */
+export async function deleteVoidInvoice(form: FormData) {
+  await requireAdmin();
+  try {
+    const id = uuid(field(form, "id"), "invoice");
+    const db = serviceDb();
+    const { count } = await db.from("payments").select("id", { count: "exact", head: true }).eq("invoice_id", id);
+    if ((count ?? 0) > 0) throw new Error("Payments are linked to this invoice, so it can't be deleted.");
+    const { data, error } = await db.from("invoices").delete().eq("id", id).eq("status", "void").select("number");
+    if (error) throw new Error("Could not delete the invoice.");
+    if (!data?.length) throw new Error("Only void invoices can be deleted. Void it first.");
+  } catch (error) { fail(error); }
+  success("Void invoice deleted.", "#invoices");
 }
 export async function saveInvoiceDetails(form: FormData) {
   await requireAdmin();

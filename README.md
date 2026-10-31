@@ -41,13 +41,15 @@ Mohit taps **Report a payment** on the homepage, enters the week, amount, date a
 
 ## Invoices
 
-Admin → **Invoices** creates a PDF invoice (no GST) to download and send to Mohit.
-- **This week's invoice** / **Today's invoice**: one tap each. **Invoice another week or day** covers any past week or date, with an optional note.
-- Lists only delivered, priced reels in the period (₹600 up to 60 s, or the confirmed price). Reels still awaiting a price are left off, with a warning.
-- Numbers run per year: `CE-2026-0001`, `CE-2026-0002`… and are never reused. A period can only be invoiced once (a day inside an invoiced week is refused), so nothing is billed twice; **Void** an invoice to redo it (only if no payment was recorded against it).
+Admin → **Invoices** creates PDF invoices (no GST) to download and send to Mohit. **Weekly is the default.**
+- **Weekly invoice**: choose the Year and Week (same Monday–Sunday weeks as the reel log; defaults to this week). It shows the billed reels and amount before you generate. The weekly reel log in admin also has a **Generate weekly invoice** button for the week you're viewing, or the invoice number and PDF once it exists.
+- **Today's invoice**: reels delivered today (shown with count and amount). **Invoice another day** covers any past date.
+- Lists only delivered, priced reels in the period (₹600 up to 60 s, or the confirmed price); the weekly total always equals that week's *Amount billed*. Reels awaiting a price are left off, with a note.
+- A weekly invoice **replaces** any daily invoices inside its week: they become void ("Replaced by CS-MS-04") and payments recorded on them move to the weekly invoice. A day already on a weekly invoice can't get its own invoice.
+- Numbers: `CS-MS-01`, `CS-MS-02`… (Crazified Studios → Mohit Sharma); the PDF downloads as `CS-MS-01.pdf`. The prefix can be changed in **Invoice details**. Numbers aren't reused; a void invoice that was never sent (e.g. a test) can be deleted.
 - Each invoice is a snapshot: later edits or deleted reels don't change an invoice already sent.
 - **Record payment through this invoice** (full or part) adds a normal payment for that billing week, linked to the invoice. The weekly balance, the PDF's *Paid / Balance due*, and the client's **Invoices** list (homepage) all update.
-- **Invoice details**: your business name, contact, address, UPI ID, bank details, payment terms, and the client's billing details. Printed on new invoices.
+- **Invoice details**: number prefix, your business name, contact, address, UPI ID, bank details, payment terms, and the client's billing details.
 - The PDF uses DM Sans and Manrope (SIL Open Font License, `assets/fonts/`). Only the admin can download PDFs; the homepage shows invoice number, period, total and status only.
 
 ## Privacy
@@ -65,11 +67,12 @@ Admin → **Invoices** creates a PDF invoice (no GST) to download and send to Mo
 
 1. Create a project (or keep your existing one; **don't delete its tables**).
 2. In **SQL Editor**:
-   - **New project:** run `sql/schema.sql`, then `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`.
-   - **Existing V1.1:** run `sql/migrate_v1_2_google_drive.sql`, then `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`.
-   - **Existing V1.2 / V1.2.1:** run `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`.
-   - **Already on V1.3:** run `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`.
-   - **Already on V1.4:** run `sql/migrate_v1_5.sql`.
+   - **New project:** run `sql/schema.sql`, then `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`, then `sql/migrate_v1_6.sql`.
+   - **Existing V1.1:** run `sql/migrate_v1_2_google_drive.sql`, then `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`, then `sql/migrate_v1_6.sql`.
+   - **Existing V1.2 / V1.2.1:** run `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`, then `sql/migrate_v1_6.sql`.
+   - **Already on V1.3:** run `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`, then `sql/migrate_v1_6.sql`.
+   - **Already on V1.4:** run `sql/migrate_v1_5.sql`, then `sql/migrate_v1_6.sql`.
+   - **Already on V1.5:** run `sql/migrate_v1_6.sql`.
 
    Migrations are additive, transactional and safe to re-run; they never delete rows.
 3. **Authentication → Users → Add user**: create the admin account with email + password. Put that email in `ADMIN_EMAIL`. Disable public sign-ups (Authentication → Sign In / Providers → turn off "Allow new users to sign up"). Only `ADMIN_EMAIL` accounts can use `/admin` either way.

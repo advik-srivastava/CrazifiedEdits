@@ -1,12 +1,13 @@
 "use client";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { CalendarDays, CalendarRange, CheckCircle2, Download, Eye, FileText, Settings2, Wallet, XCircle } from "lucide-react";
+import { CalendarDays, CalendarRange, CheckCircle2, ChevronDown, Download, Eye, FileText, Settings2, Trash2, Wallet, XCircle } from "lucide-react";
+import type { WeekSummary } from "@/lib/models";
 import type { AdminInvoice } from "@/lib/invoices-server";
-import { invoicePeriod, payStateLabel, periodLabel, periodsOverlap, type InvoiceProfile } from "@/lib/invoices";
-import { formatINR, prettyDate } from "@/lib/billing";
+import { payStateLabel, periodLabel, periodsOverlap, type InvoiceProfile } from "@/lib/invoices";
+import { CALENDAR_END, CALENDAR_START, formatINR, prettyDate, sundayFor, weekYear } from "@/lib/billing";
 import { paymentMethods } from "@/lib/validation";
-import { generateInvoice, recordInvoicePayment, saveInvoiceDetails, voidInvoice } from "@/app/admin/actions";
+import { deleteVoidInvoice, generateInvoice, recordInvoicePayment, saveInvoiceDetails, voidInvoice } from "@/app/admin/actions";
 import { Empty, Pill, SectionHeading } from "./ui";
 
 const tone = { unpaid: "red", partial: "orange", paid: "green", void: "neutral" } as const;
@@ -16,21 +17,53 @@ function Submit({ children, variant = "primary", pending = "Working…", classNa
 }
 const confirmSubmit = (msg: string) => (e: React.FormEvent<HTMLFormElement>) => { if (!confirm(msg)) e.preventDefault(); };
 
-function QuickInvoice({ kind, today, invoices }: { kind: "weekly" | "daily"; today: string; invoices: AdminInvoice[] }) {
-  const period = invoicePeriod(kind, today);
-  const existing = invoices.find(i => i.status === "issued" && periodsOverlap(period, { start: i.period_start, end: i.period_end }));
-  const label = kind === "weekly" ? "This week's invoice" : "Today's invoice";
-  const sub = periodLabel(kind, period.start, period.end, prettyDate);
-  const Icon = kind === "weekly" ? CalendarRange : CalendarDays;
-  if (existing) return <div className="quick-invoice done">
-    <Icon size={22} aria-hidden /><span><strong>{label}</strong><small>{sub} · {existing.number} already covers this</small></span>
-    <a className="button secondary" href={`/api/invoices/${existing.id}/pdf`}><Download size={16} aria-hidden /> PDF</a>
+const YEARS = Array.from({ length: Number(CALENDAR_END.slice(0, 4)) - Number(CALENDAR_START.slice(0, 4)) + 1 }, (_, k) => String(Number(CALENDAR_START.slice(0, 4)) + k));
+const covering = (invoices: AdminInvoice[], start: string, end: string) =>
+  invoices.filter(i => i.status === "issued" && periodsOverlap({ start, end }, { start: i.period_start, end: i.period_end }));
+
+/** Weekly invoice (the main one): same Year / Week choice as the weekly reel log. */
+function WeeklyInvoice({ weeks, today, invoices }: { weeks: WeekSummary[]; today: string; invoices: AdminInvoice[] }) {
+  const ordered = useMemo(() => [...weeks].sort((a, b) => a.ending.localeCompare(b.ending)), [weeks]);
+  const current = sundayFor(today);
+  const [ending, setEnding] = useState(current);
+  const week = ordered.find(w => w.ending === ending) || ordered[ordered.length - 1];
+  const year = weekYear(week);
+  const yearWeeks = ordered.filter(w => weekYear(w) === year && w.starting <= today);
+  const goYear = (y: string) => { const list = ordered.filter(w => weekYear(w) === y && w.starting <= today); if (list.length) setEnding(list.some(w => w.ending === current) ? current : list[list.length - 1].ending); };
+  const onWeek = covering(invoices, week.starting, week.ending);
+  const weekly = onWeek.find(i => i.kind === "weekly");
+  const dailies = onWeek.filter(i => i.kind === "daily");
+  return <div className="weekly-invoice">
+    <div className="weekly-invoice-head"><CalendarRange size={22} aria-hidden /><span><strong>Weekly invoice</strong><small>Monday–Sunday, settled on Sunday</small></span></div>
+    <div className="billing-picker-row invoice-pickers">
+      <label className="year-selector"><span>Year</span><select value={year} onChange={e => goYear(e.target.value)} aria-label="Invoice year">{YEARS.filter(y => y <= today.slice(0, 4)).map(y => <option key={y} value={y}>{y}</option>)}</select><ChevronDown size={15} aria-hidden /></label>
+      <label className="week-selector"><CalendarDays size={17} aria-hidden /><select value={week.ending} onChange={e => setEnding(e.target.value)} aria-label="Invoice week">{yearWeeks.map(w => <option key={w.ending} value={w.ending}>{prettyDate(w.starting)} – {prettyDate(w.ending)}{w.ending === current ? " (this week)" : ""}</option>)}</select><ChevronDown size={16} aria-hidden /></label>
+    </div>
+    <div className="weekly-invoice-summary">
+      <span><strong>{week.count}</strong> billed reel{week.count === 1 ? "" : "s"}</span>
+      <span><strong>{formatINR(week.billed)}</strong> to invoice</span>
+      {week.reviewCount > 0 && <span className="muted">{week.reviewCount} awaiting a price (not included)</span>}
+    </div>
+    {weekly
+      ? <div className="weekly-invoice-done"><CheckCircle2 size={18} aria-hidden /><span>Invoiced as <strong>{weekly.number}</strong> · {payStateLabel[weekly.state]}</span><a className="button secondary" href={`/api/invoices/${weekly.id}/pdf`}><Download size={16} aria-hidden /> {weekly.number}.pdf</a></div>
+      : <form action={generateInvoice} className="weekly-invoice-go">
+          <input type="hidden" name="kind" value="weekly" /><input type="hidden" name="date" value={week.starting} />
+          <input name="notes" maxLength={1000} placeholder="Note on the invoice (optional)" aria-label="Note on the invoice" />
+          <Submit pending="Generating…" className="weekly-invoice-button"><FileText size={16} aria-hidden /> Generate weekly invoice</Submit>
+          {dailies.length > 0 && <small className="muted">Replaces daily invoice{dailies.length === 1 ? "" : "s"} {dailies.map(d => d.number).join(", ")} for this week; payments on {dailies.length === 1 ? "it" : "them"} carry over.</small>}
+        </form>}
   </div>;
-  return <form action={generateInvoice} className="quick-invoice">
-    <input type="hidden" name="kind" value={kind} /><input type="hidden" name="date" value={today} />
-    <Icon size={22} aria-hidden /><span><strong>{label}</strong><small>{sub}</small></span>
-    <Submit pending="Generating…"><FileText size={16} aria-hidden /> Generate</Submit>
-  </form>;
+}
+/** Daily invoice: reels delivered on one day. Secondary to the weekly invoice. */
+function TodayInvoice({ today, todayCount, todayBilled, invoices }: { today: string; todayCount: number; todayBilled: number; invoices: AdminInvoice[] }) {
+  const onDay = covering(invoices, today, today)[0];
+  return <div className="quick-invoice">
+    <CalendarDays size={22} aria-hidden />
+    <span><strong>Today&apos;s invoice</strong><small>{prettyDate(today)} · {todayCount} reel{todayCount === 1 ? "" : "s"} delivered today · {formatINR(todayBilled)}</small></span>
+    {onDay
+      ? <a className="button secondary" href={`/api/invoices/${onDay.id}/pdf`} title={`Already on ${onDay.number}`}><Download size={16} aria-hidden /> {onDay.number}</a>
+      : <form action={generateInvoice}><input type="hidden" name="kind" value="daily" /><input type="hidden" name="date" value={today} /><Submit variant="secondary" pending="Generating…"><FileText size={16} aria-hidden /> Generate</Submit></form>}
+  </div>;
 }
 function InvoiceRow({ inv }: { inv: AdminInvoice }) {
   const [amount, setAmount] = useState(String(inv.balance));
@@ -39,7 +72,7 @@ function InvoiceRow({ inv }: { inv: AdminInvoice }) {
     <summary>
       <span className="invoice-icon"><FileText size={20} aria-hidden /></span>
       <span className="invoice-main"><strong>{inv.number}</strong><small>{inv.kind === "weekly" ? "Weekly" : "Daily"} · {periodLabel(inv.kind, inv.period_start, inv.period_end, prettyDate)} · {inv.item_count} reel{inv.item_count === 1 ? "" : "s"}</small></span>
-      <span className="invoice-amounts"><strong>{formatINR(inv.total)}</strong><small>{inv.state === "void" ? "Void" : inv.balance > 0 ? `${formatINR(inv.balance)} due` : "Settled"}</small></span>
+      <span className="invoice-amounts"><strong>{formatINR(inv.total)}</strong><small>{inv.state === "void" ? (inv.replacedBy ? `Replaced by ${inv.replacedBy}` : "Void") : inv.balance > 0 ? `${formatINR(inv.balance)} due` : "Settled"}</small></span>
       <Pill tone={tone[inv.state]}>{payStateLabel[inv.state]}</Pill>
     </summary>
     <div className="invoice-pane">
@@ -47,6 +80,7 @@ function InvoiceRow({ inv }: { inv: AdminInvoice }) {
         <a className="button primary" href={`/api/invoices/${inv.id}/pdf`}><Download size={16} aria-hidden /> Download PDF</a>
         <a className="button secondary" href={`/api/invoices/${inv.id}/pdf?inline=1`} target="_blank" rel="noopener noreferrer"><Eye size={16} aria-hidden /> Preview</a>
       </div>
+      {inv.replacedBy && <p className="mini-note replaced-note">Replaced by weekly invoice {inv.replacedBy}.</p>}
       <p className="muted mini-note">Issued {prettyDate(inv.issue_date)} · due {prettyDate(inv.due_date)}{inv.paid > 0 ? ` · ${formatINR(inv.paid)} paid` : ""}{inv.notes ? ` · Note: ${inv.notes}` : ""}</p>
       {inv.payments.length > 0 && <ul className="invoice-payments">{inv.payments.map(p => <li key={p.id}><CheckCircle2 size={15} aria-hidden /> {formatINR(p.amount)} on {prettyDate(p.paid_on)}{p.method ? ` · ${p.method}` : ""}</li>)}</ul>}
       {inv.state !== "void" && inv.balance > 0 && <form action={recordInvoicePayment} className="edit-grid invoice-pay-form">
@@ -63,6 +97,11 @@ function InvoiceRow({ inv }: { inv: AdminInvoice }) {
         <span className="muted mini-note">Made a mistake? Void it and generate a new one.</span>
         <Submit variant="danger" pending="Voiding…"><XCircle size={16} aria-hidden /> Void invoice</Submit>
       </form>}
+      {inv.state === "void" && inv.payments.length === 0 && <form action={deleteVoidInvoice} className="delete-row" onSubmit={confirmSubmit(`Delete ${inv.number} completely? Only do this if you never sent it to the client.`)}>
+        <input type="hidden" name="id" value={inv.id} />
+        <span className="muted mini-note">Never sent it (e.g. a test)? Delete it. If it&apos;s the latest invoice, its number will be used again.</span>
+        <Submit variant="danger" pending="Deleting…"><Trash2 size={16} aria-hidden /> Delete invoice</Submit>
+      </form>}
     </div>
   </details>;
 }
@@ -73,6 +112,8 @@ function ProfileForm({ profile }: { profile: InvoiceProfile }) {
         : <input id={`ip-${name}`} name={name} type={opts.type || "text"} defaultValue={String(profile[name] ?? "")} placeholder={opts.placeholder} />}</div>;
   return <details className="invoice-profile"><summary><Settings2 size={15} aria-hidden /> Invoice details (your business, payment details, client)</summary>
     <form action={saveInvoiceDetails} className="edit-grid">
+      <div className="eyebrow wide">INVOICE NUMBER</div>
+      {f("invoice_prefix", "Number prefix (CS-MS gives CS-MS-01, CS-MS-02…)")}
       <div className="eyebrow wide">FROM</div>
       {f("business_name", "Business name")}{f("owner_name", "Your name")}
       {f("email", "Email", { type: "email" })}{f("phone", "Phone", { type: "tel" })}
@@ -90,16 +131,17 @@ function ProfileForm({ profile }: { profile: InvoiceProfile }) {
   </details>;
 }
 
-export function InvoicesPanel({ invoices, profile, today, ready }: { invoices: AdminInvoice[]; profile: InvoiceProfile; today: string; ready: boolean }) {
+export function InvoicesPanel({ invoices, profile, today, ready, weeks, todayCount, todayBilled }: { invoices: AdminInvoice[]; profile: InvoiceProfile; today: string; ready: boolean; weeks: WeekSummary[]; todayCount: number; todayBilled: number }) {
   const [shown, setShown] = useState(10);
   const due = invoices.filter(i => i.state === "unpaid" || i.state === "partial").reduce((s, i) => s + i.balance, 0);
   return <section className="surface invoices-panel" id="invoices">
-    <div className="section-top"><SectionHeading eyebrow="BILLING" title="Invoices" description="PDF invoices (no GST) for a billing week or a single day. Download and send them to Mohit; record payments against them here." />{due > 0 && <Pill tone="orange">{formatINR(due)} due</Pill>}</div>
+    <div className="section-top"><SectionHeading eyebrow="BILLING" title="Invoices" description="PDF invoices (no GST), weekly by default. Download and send them to Mohit; record payments against them here." />{due > 0 && <Pill tone="orange">{formatINR(due)} due</Pill>}</div>
     {!ready && <div className="small-alert" role="alert">Run <code>sql/migrate_v1_5.sql</code> in the Supabase SQL Editor to enable invoices.</div>}
-    <div className="quick-invoices"><QuickInvoice kind="weekly" today={today} invoices={invoices} /><QuickInvoice kind="daily" today={today} invoices={invoices} /></div>
-    <details className="invoice-custom"><summary><CalendarDays size={15} aria-hidden /> Invoice another week or day</summary>
+    <WeeklyInvoice weeks={weeks} today={today} invoices={invoices} />
+    <TodayInvoice today={today} todayCount={todayCount} todayBilled={todayBilled} invoices={invoices} />
+    <details className="invoice-custom"><summary><CalendarDays size={15} aria-hidden /> Invoice another day</summary>
       <form action={generateInvoice} className="edit-grid">
-        <div className="field"><label htmlFor="inv-kind">Type</label><select id="inv-kind" name="kind" defaultValue="weekly"><option value="weekly">Weekly (Monday–Sunday containing the date)</option><option value="daily">Daily (that date only)</option></select></div>
+        <input type="hidden" name="kind" value="daily" />
         <div className="field"><label htmlFor="inv-date">Date</label><input id="inv-date" name="date" type="date" defaultValue={today} max={today} required /></div>
         <div className="field wide"><label htmlFor="inv-notes">Note on the invoice <span className="optional">optional</span></label><input id="inv-notes" name="notes" maxLength={1000} placeholder="e.g. Includes the revision requested on 29 Oct" /></div>
         <div className="wide align-end"><Submit pending="Generating…"><FileText size={16} aria-hidden /> Generate invoice</Submit></div>
@@ -107,7 +149,7 @@ export function InvoicesPanel({ invoices, profile, today, ready }: { invoices: A
     </details>
     {invoices.length ? <div className="invoice-list">{invoices.slice(0, shown).map(inv => <InvoiceRow key={inv.id} inv={inv} />)}
       {invoices.length > shown && <button type="button" className="button secondary load-more-payments" onClick={() => setShown(n => n + 20)}>Show more ({invoices.length - shown} remaining)</button>}</div>
-      : <Empty title="No invoices yet" description="Generate this week's or today's invoice above. Only delivered, priced reels are included." icon={<FileText />} />}
+      : <Empty title="No invoices yet" description="Choose a week above and generate its invoice. Only delivered, priced reels are included." icon={<FileText />} />}
     <ProfileForm profile={profile} />
   </section>;
 }

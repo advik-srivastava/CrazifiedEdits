@@ -17,9 +17,9 @@ export const INVOICE_MIGRATION_HINT = "Invoices aren't set up yet. Run sql/migra
 export type InvoiceRow = {
   id: string; number: string; kind: InvoiceKind; period_start: string; period_end: string; issue_date: string; due_date: string;
   items: InvoiceItem[]; item_count: number; total: number; profile: InvoiceProfile; notes: string | null; status: "issued" | "void";
-  created_at: string; voided_at: string | null;
+  created_at: string; voided_at: string | null; superseded_by?: string | null;
 };
-export type AdminInvoice = Omit<InvoiceRow, "items" | "profile"> & { paid: number; balance: number; state: InvoicePayState; payments: { id: string; amount: number; paid_on: string; method: string | null }[] };
+export type AdminInvoice = Omit<InvoiceRow, "items" | "profile"> & { replacedBy: string | null; paid: number; balance: number; state: InvoicePayState; payments: { id: string; amount: number; paid_on: string; method: string | null }[] };
 export type PublicInvoice = { key: string; number: string; kind: InvoiceKind; period_start: string; period_end: string; issue_date: string; due_date: string; total: number; paid: number; state: InvoicePayState };
 
 const round = (n: number) => Math.round(n * 100) / 100;
@@ -53,12 +53,13 @@ function summarize(row: InvoiceRow, payments: { id: string; amount: number; paid
 export async function getInvoicesForAdmin(limit = 60): Promise<AdminInvoice[]> {
   noStore();
   const { data, error } = await serviceDb().from("invoices")
-    .select("id,number,kind,period_start,period_end,issue_date,due_date,item_count,total,notes,status,created_at,voided_at")
+    .select("*")
     .order("created_at", { ascending: false }).limit(limit);
   if (error || !data) return [];
   const rows = data as InvoiceRow[];
   const pays = await paymentsByInvoice(rows.map(r => r.id));
-  return rows.map(r => { const p = pays.get(r.id) || []; const s = summarize(r, p); return { ...r, total: s.total, paid: s.paid, balance: s.balance, state: s.state, payments: p }; });
+  const numberOf = new Map(rows.map(r => [r.id, r.number]));
+  return rows.map(r => { const p = pays.get(r.id) || []; const s = summarize(r, p); const { items: _i, profile: _p, ...rest } = r; void _i; void _p; return { ...rest, total: s.total, paid: s.paid, balance: s.balance, state: s.state, payments: p, replacedBy: r.superseded_by ? numberOf.get(r.superseded_by) ?? null : null }; });
 }
 /** What the client page shows: number, period, dates, total, paid and status. No line items, notes or IDs. */
 export async function getPublicInvoices(limit = 30): Promise<PublicInvoice[]> {
@@ -75,30 +76,60 @@ export async function getPublicInvoices(limit = 30): Promise<PublicInvoice[]> {
   });
 }
 
-/** Create an invoice for a week or a day. Refuses empty periods and periods already covered by another invoice. */
-export async function createInvoice(kind: InvoiceKind, date: string, notes: string | null): Promise<InvoiceRow> {
+export const NUMBER_MIGRATION_HINT = "Run sql/migrate_v1_6.sql in the Supabase SQL Editor to use CS-MS invoice numbers.";
+export type CreatedInvoice = InvoiceRow & { replaced: string[] };
+
+/**
+ * Create an invoice for a week (the priority) or a day.
+ * - Weekly: refused if the week already has a weekly invoice. Daily invoices inside the week are replaced:
+ *   they're voided and any payments recorded against them move to the new weekly invoice (balances don't change).
+ * - Daily: refused if that day is already on a weekly or daily invoice.
+ * - Refuses empty periods, with a hint about reels still pending review or awaiting a price.
+ */
+export async function createInvoice(kind: InvoiceKind, date: string, notes: string | null): Promise<CreatedInvoice> {
   const db = serviceDb();
   const { start, end } = invoicePeriod(kind, date);
-  const { data: existing, error: exErr } = await db.from("invoices").select("number,kind,period_start,period_end").eq("status", "issued")
+  const { data: existing, error: exErr } = await db.from("invoices").select("id,number,kind,period_start,period_end").eq("status", "issued")
     .lte("period_start", end).gte("period_end", start);
   if (exErr) throw new Error(INVOICE_MIGRATION_HINT);
-  const clash = (existing || []).find(i => periodsOverlap({ start, end }, { start: i.period_start, end: i.period_end }));
-  if (clash) throw new Error(`Invoice ${clash.number} already covers ${clash.kind === "daily" ? "that day" : "that week"}. Void it first if you want a new one, so nothing is billed twice.`);
+  const overlapping = (existing || []).filter(i => periodsOverlap({ start, end }, { start: i.period_start, end: i.period_end }));
+  const weeklyClash = overlapping.find(i => i.kind === "weekly");
+  if (weeklyClash) throw new Error(kind === "weekly"
+    ? `This week already has invoice ${weeklyClash.number}. Void it first if you want to make a new one.`
+    : `That day is already on this week's invoice ${weeklyClash.number}.`);
+  if (kind === "daily" && overlapping.length) throw new Error(`That day already has invoice ${overlapping[0].number}.`);
+  const toReplace = kind === "weekly" ? overlapping.filter(i => i.kind === "daily") : [];
 
-  const { items, total, awaitingPrice } = invoiceItems(await getReels(), start, end);
-  if (!items.length) throw new Error(awaitingPrice
-    ? `No billable reels in this ${kind === "daily" ? "day" : "week"}: ${awaitingPrice} delivered reel${awaitingPrice === 1 ? " needs" : "s need"} a confirmed price first.`
-    : `No reels were delivered in this ${kind === "daily" ? "day" : "week"}, so there's nothing to invoice.`);
+  const reels = await getReels();
+  const { items, total, awaitingPrice } = invoiceItems(reels, start, end);
+  if (!items.length) {
+    const where = kind === "daily" ? "on this day" : "in this week";
+    const pending = reels.filter(r => !r.deleted_at && r.status === "discovered" && (r.drive_created_at || r.first_seen_at) &&
+      (() => { const d = todayInIndia(new Date(r.drive_created_at || r.first_seen_at)); return d >= start && d <= end; })()).length;
+    const hints = [pending ? `${pending} uploaded reel${pending === 1 ? " is" : "s are"} still pending review (mark ${pending === 1 ? "it" : "them"} delivered first)` : "",
+      awaitingPrice ? `${awaitingPrice} delivered reel${awaitingPrice === 1 ? " needs" : "s need"} a confirmed price` : ""].filter(Boolean);
+    throw new Error(`No billable reels were delivered ${where}${hints.length ? `: ${hints.join("; ")}.` : ", so there's nothing to invoice."}`);
+  }
   const profile = await getInvoiceProfile();
   const issue = todayInIndia();
-  const year = Number(issue.slice(0, 4));
-  // Sequential numbers per year. The unique constraint makes concurrent creates safe: retry with the next number.
+  // Sequential numbers in the prefix's series. The unique constraint makes concurrent creates safe: retry with the next number.
   for (let attempt = 0; attempt < 4; attempt++) {
-    const { data: nums } = await db.from("invoices").select("number").like("number", `CE-${year}-%`);
-    const number = nextInvoiceNumber((nums || []).map(n => n.number as string), year);
+    const { data: nums } = await db.from("invoices").select("number").like("number", `${profile.invoice_prefix}-%`);
+    const number = nextInvoiceNumber((nums || []).map(n => n.number as string), profile.invoice_prefix);
     const row = { number, kind, period_start: start, period_end: end, issue_date: issue, due_date: dueDate(issue, profile.payment_terms_days), items, item_count: items.length, total, profile, notes };
     const { data, error } = await db.from("invoices").insert(row).select("*").single();
-    if (!error && data) return data as InvoiceRow;
+    if (!error && data) {
+      const created = data as InvoiceRow;
+      for (const old of toReplace) {
+        const { error: payErr } = await db.from("payments").update({ invoice_id: created.id }).eq("invoice_id", old.id);
+        if (payErr) throw new Error("The weekly invoice was created, but payments on the daily invoices couldn't be moved to it. Please refresh and check.");
+        let { error: vErr } = await db.from("invoices").update({ status: "void", voided_at: new Date().toISOString(), superseded_by: created.id }).eq("id", old.id);
+        if (vErr && /superseded_by/.test(vErr.message)) ({ error: vErr } = await db.from("invoices").update({ status: "void", voided_at: new Date().toISOString() }).eq("id", old.id));
+        if (vErr) throw new Error(`The weekly invoice was created, but daily invoice ${old.number} couldn't be voided. Void it manually.`);
+      }
+      return { ...created, replaced: toReplace.map(o => o.number) };
+    }
+    if (error && /invoices_number_check|check constraint/i.test(error.message)) throw new Error(NUMBER_MIGRATION_HINT);
     if (error && !/duplicate|unique/i.test(error.message)) throw new Error(/invoices/.test(error.message) ? INVOICE_MIGRATION_HINT : "Could not create the invoice.");
   }
   throw new Error("Could not create the invoice. Please try again.");

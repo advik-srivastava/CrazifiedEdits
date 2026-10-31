@@ -10,6 +10,8 @@ import { mondayFor, reelFee, pricingState, shiftISODate, sundayFor, BILLED_STATE
 export type InvoiceKind = "weekly" | "daily";
 export type InvoiceItem = { title: string; delivered: string; seconds: number | null; amount: number };
 export type InvoiceProfile = {
+  /** Invoice numbers are PREFIX-01, PREFIX-02… e.g. CS-MS-01 (Crazified Studios → Mohit Sharma). */
+  invoice_prefix: string;
   business_name: string;
   owner_name: string;
   email: string;
@@ -25,6 +27,7 @@ export type InvoiceProfile = {
   footer_note: string;
 };
 export const DEFAULT_PROFILE: InvoiceProfile = {
+  invoice_prefix: "CS-MS",
   business_name: "Crazified Studios",
   owner_name: "Advik",
   email: "",
@@ -32,7 +35,7 @@ export const DEFAULT_PROFILE: InvoiceProfile = {
   address: "",
   upi_id: "",
   bank_details: "",
-  client_name: "Mohit",
+  client_name: "Mohit Sharma",
   client_handle: "@OkayMohit",
   client_address: "",
   client_email: "",
@@ -40,6 +43,7 @@ export const DEFAULT_PROFILE: InvoiceProfile = {
   footer_note: "Thank you for working with Crazified Studios."
 };
 const LIMITS: Record<keyof InvoiceProfile, number> = {
+  invoice_prefix: 12,
   business_name: 80, owner_name: 80, email: 120, phone: 40, address: 300, upi_id: 80, bank_details: 300,
   client_name: 80, client_handle: 60, client_address: 300, client_email: 120, payment_terms_days: 0, footer_note: 300
 };
@@ -55,6 +59,9 @@ export function normalizeProfile(raw: unknown): InvoiceProfile {
     }
     if (typeof src[key] === "string") (out[key] as string) = (src[key] as string).replace(/\r/g, "").trim().slice(0, LIMITS[key]);
   }
+  // Prefix: letters/digits in groups separated by "-", e.g. CS-MS.
+  out.invoice_prefix = out.invoice_prefix.toUpperCase().replace(/[^A-Z0-9-]/g, "").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  if (!/^[A-Z0-9]+(-[A-Z0-9]+)*$/.test(out.invoice_prefix) || out.invoice_prefix.length < 2) out.invoice_prefix = DEFAULT_PROFILE.invoice_prefix;
   if (!out.business_name) out.business_name = DEFAULT_PROFILE.business_name;
   if (!out.client_name) out.client_name = DEFAULT_PROFILE.client_name;
   return out;
@@ -72,14 +79,14 @@ export function invoiceItems(reels: Reel[], start: string, end: string): { items
   const total = Math.round(items.reduce((s, i) => s + i.amount, 0) * 100) / 100;
   return { items, total, awaitingPrice: inPeriod.filter(r => pricingState(r) === "review").length };
 }
-export function formatInvoiceNumber(year: number, n: number): string {
-  return `CE-${year}-${String(n).padStart(4, "0")}`;
+export function formatInvoiceNumber(prefix: string, n: number): string {
+  return `${prefix}-${String(n).padStart(2, "0")}`;
 }
-/** Next sequential number for the year, e.g. CE-2026-0007 after CE-2026-0006. Numbers are never reused. */
-export function nextInvoiceNumber(existing: string[], year: number): string {
-  const prefix = `CE-${year}-`;
-  const max = existing.filter(n => n.startsWith(prefix)).reduce((m, n) => Math.max(m, Number(n.slice(prefix.length)) || 0), 0);
-  return formatInvoiceNumber(year, max + 1);
+/** Next number in the series, e.g. CS-MS-07 after CS-MS-06. Numbers are never reused while an invoice holds them. */
+export function nextInvoiceNumber(existing: string[], prefix: string): string {
+  const re = new RegExp(`^${prefix.replace(/[-]/g, "\\-")}-(\\d+)$`);
+  const max = existing.reduce((m, n) => { const hit = re.exec(n); return hit ? Math.max(m, Number(hit[1])) : m; }, 0);
+  return formatInvoiceNumber(prefix, max + 1);
 }
 export function periodsOverlap(a: { start: string; end: string }, b: { start: string; end: string }): boolean {
   return a.start <= b.end && b.start <= a.end;

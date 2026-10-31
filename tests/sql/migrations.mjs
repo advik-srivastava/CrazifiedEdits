@@ -135,13 +135,30 @@ try {
   ok((await q("SELECT count(*)::int n FROM payments WHERE amount=600 AND paid_on='2026-11-03' AND invoice_id IS NULL")).rows[0].n === 1, "deleting an invoice never deletes payments");
   ok((await q("SELECT relrowsecurity r FROM pg_class WHERE relname='invoices'")).rows[0].r === true, "invoices has RLS on");
   ok((await q("SELECT invoice_profile::text p FROM app_settings WHERE id=1")).rows[0].p === "{}", "invoice details default to empty");
+  // V1.6: CS-MS numbering, renumbering of old invoices, weekly replaces daily.
+  await q(`INSERT INTO invoices (number,kind,period_start,period_end,issue_date,due_date,item_count,total,created_at) VALUES
+    ('CE-2026-0001','daily','2026-10-31','2026-10-31','2026-10-31','2026-11-07',5,3000,'2026-10-31 10:00+05:30'),
+    ('CE-2026-0002','daily','2026-11-02','2026-11-02','2026-11-02','2026-11-09',1,600,'2026-11-02 10:00+05:30')`);
+  await q(fs.readFileSync(repo + "migrate_v1_6.sql", "utf8"));
+  await q(fs.readFileSync(repo + "migrate_v1_6.sql", "utf8"));
+  ok(true, "migrate_v1_6.sql applies twice without error");
+  const nums = (await q("SELECT number FROM invoices ORDER BY created_at")).rows.map(r => r.number).join(",");
+  ok(nums === "CS-MS-01,CS-MS-02", `old invoices renumbered in order (${nums})`);
+  let oldFmt = 0;
+  for (const bad of ["cs-ms-01", "CS-MS-1", "CS MS 01", "CSMS"]) { try { await q(`INSERT INTO invoices (number,kind,period_start,period_end,issue_date,due_date,item_count,total) VALUES ($1,'daily','2026-11-05','2026-11-05','2026-11-05','2026-11-05',1,600)`, [bad]); } catch { oldFmt++; } }
+  oldFmt = oldFmt === 4;
+  ok(oldFmt, "only PREFIX-NN numbers accepted now");
+  const weeklyInv = (await q(`INSERT INTO invoices (number,kind,period_start,period_end,issue_date,due_date,item_count,total) VALUES ('CS-MS-03','weekly','2026-10-26','2026-11-01','2026-11-01','2026-11-08',6,3600) RETURNING id`)).rows[0].id;
+  await q("UPDATE invoices SET status='void', voided_at=now(), superseded_by=$1 WHERE number='CS-MS-01'", [weeklyInv]);
+  ok((await q("SELECT superseded_by=$1 r FROM invoices WHERE number='CS-MS-01'", [weeklyInv])).rows[0].r === true, "a daily invoice can point to the weekly invoice that replaced it");
   // A fresh project path: schema.sql then migrate_v1_3.sql.
   await q("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
   await q(fs.readFileSync(repo + "schema.sql", "utf8"));
   await q(fs.readFileSync(repo + "migrate_v1_3.sql", "utf8"));
   await q(fs.readFileSync(repo + "migrate_v1_4.sql", "utf8"));
   await q(fs.readFileSync(repo + "migrate_v1_5.sql", "utf8"));
-  ok(true, "fresh install: schema.sql + migrate_v1_3 + v1_4 + v1_5 apply cleanly");
+  await q(fs.readFileSync(repo + "migrate_v1_6.sql", "utf8"));
+  ok(true, "fresh install: schema.sql + migrate_v1_3 … v1_6 apply cleanly");
 } catch (e) { console.error("ERROR", e.message); fails++; }
 finally { await c.end(); await server.stop(); }
 console.log(fails ? `${fails} FAILED` : "ALL MIGRATION CHECKS PASSED");

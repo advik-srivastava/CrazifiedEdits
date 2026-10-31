@@ -15,7 +15,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const disposition = request.nextUrl.searchParams.get("inline") ? "inline" : "attachment";
     return new NextResponse(Buffer.from(pdf.bytes), { headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `${disposition}; filename="Invoice-${pdf.number}.pdf"`,
+      "Content-Disposition": `${disposition}; filename="${pdf.number}.pdf"`,
       "Cache-Control": "private, no-store"
     } });
   } catch (error) {
