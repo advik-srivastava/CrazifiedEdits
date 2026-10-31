@@ -64,7 +64,15 @@ const claims = [
   { id: "20000000-0000-4000-8000-000000000002", week_ending: sun(0), amount: 1200, paid_on: today, method: "UPI", reference: null, note: null, screenshot_path: null, status: "pending", payment_id: null, review_note: null, submitter_hash: "y", submitted_at: iso(today, 9), reviewed_at: null }
 ];
 export const received = [];
-const tables = { reels, payments, sync_events: events, payment_claims: claims };
+const invItems = (n, date) => Array.from({ length: n }, (_, i) => ({ title: `Weekly reel ${i + 1} — fitness series.mp4`, delivered: date, seconds: 40 + i, amount: 600 }));
+const invoices = [
+  { id: "20000000-0000-4000-8000-000000000002", number: "CE-2026-0002", kind: "weekly", period_start: mon(1), period_end: sun(1), issue_date: sun(1), due_date: d(1), items: invItems(9, mon(1)), item_count: 9, total: 5400, profile: { upi_id: "example@upi" }, notes: null, status: "issued", created_at: iso(sun(1)), voided_at: null },
+  { id: "20000000-0000-4000-8000-000000000001", number: "CE-2026-0001", kind: "weekly", period_start: mon(2), period_end: sun(2), issue_date: sun(2), due_date: d(-5), items: invItems(6, mon(2)), item_count: 6, total: 3600, profile: {}, notes: null, status: "issued", created_at: iso(sun(2)), voided_at: null }
+];
+// Payments made through the invoices above.
+payments[0].invoice_id = invoices[0].id; payments[2].invoice_id = invoices[1].id;
+settings.invoice_profile = { upi_id: "example@upi", email: "studio@example.test" };
+const tables = { reels, payments, sync_events: events, payment_claims: claims, invoices };
 const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
 export const ACCESS_TOKEN = `${b64({ alg: "HS256", typ: "JWT" })}.${b64({ sub: "admin-user", email: ADMIN, role: "authenticated", aud: "authenticated", exp: Math.floor(now / 1000) + 86400 })}.sig`;
 const user = { id: "admin-user", aud: "authenticated", role: "authenticated", email: ADMIN, app_metadata: {}, user_metadata: {}, created_at: iso(d(-30)) };
@@ -89,6 +97,12 @@ http.createServer((req, res) => {
   if (table === "google_drive_connection") return send(200, single ? connection : [connection]);
   if (tables[table]) {
     const offset = Number(url.searchParams.get("offset") || 0);
+    let rows = tables[table];
+    // Minimal PostgREST filters used by the app: id=eq.X and invoice_id=in.(...).
+    const idEq = url.searchParams.get("id"); if (idEq?.startsWith("eq.")) rows = rows.filter(r => r.id === idEq.slice(3));
+    const inv = url.searchParams.get("invoice_id"); if (inv?.startsWith("in.(")) { const ids = inv.slice(4, -1).split(",").map(x => x.replace(/"/g, "")); rows = rows.filter(r => ids.includes(r.invoice_id)); }
+    if (single) return rows.length ? send(200, rows[0]) : send(406, { message: "no rows" });
+    if (rows !== tables[table]) return send(200, rows);
     return send(200, offset ? [] : tables[table]);
   }
   send(404, { message: "unknown table" });

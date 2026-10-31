@@ -115,12 +115,33 @@ try {
   ok((await q("SELECT deleted_at IS NOT NULL d FROM reels WHERE title='New'")).rows[0].d === true, "previously auto-removed reels become deleted");
   await q("UPDATE reels SET deleted_at=now(), status='cancelled' WHERE drive_item_id='f1'");
   ok((await q("SELECT count(*)::int n FROM reels WHERE deleted_at IS NOT NULL")).rows[0].n === 2, "reels can be marked deleted");
+  // V1.5 invoices.
+  await q(fs.readFileSync(repo + "migrate_v1_5.sql", "utf8"));
+  await q(fs.readFileSync(repo + "migrate_v1_5.sql", "utf8"));
+  ok(true, "migrate_v1_5.sql applies twice without error");
+  const inv = (await q(`INSERT INTO invoices (number,kind,period_start,period_end,issue_date,due_date,items,item_count,total)
+    VALUES ('CE-2026-0001','weekly','2026-10-26','2026-11-01','2026-11-01','2026-11-08','[]',2,1200) RETURNING id`)).rows[0].id;
+  let dupNum = false; try { await q(`INSERT INTO invoices (number,kind,period_start,period_end,issue_date,due_date,item_count,total) VALUES ('CE-2026-0001','daily','2026-11-02','2026-11-02','2026-11-02','2026-11-02',1,600)`); } catch { dupNum = true; }
+  ok(dupNum, "invoice numbers are unique");
+  let badWeek = false; try { await q(`INSERT INTO invoices (number,kind,period_start,period_end,issue_date,due_date,item_count,total) VALUES ('CE-2026-0002','weekly','2026-10-27','2026-11-02','2026-11-02','2026-11-02',1,600)`); } catch { badWeek = true; }
+  ok(badWeek, "weekly invoice must run Monday to Sunday");
+  let badDay = false; try { await q(`INSERT INTO invoices (number,kind,period_start,period_end,issue_date,due_date,item_count,total) VALUES ('CE-2026-0003','daily','2026-11-02','2026-11-03','2026-11-02','2026-11-02',1,600)`); } catch { badDay = true; }
+  ok(badDay, "daily invoice covers exactly one day");
+  let badFmt = false; try { await q(`INSERT INTO invoices (number,kind,period_start,period_end,issue_date,due_date,item_count,total) VALUES ('INV-1','daily','2026-11-02','2026-11-02','2026-11-02','2026-11-02',1,600)`); } catch { badFmt = true; }
+  ok(badFmt, "invoice number format enforced");
+  await q("INSERT INTO payments (week_ending,amount,paid_on,invoice_id) VALUES ('2026-11-01',600,'2026-11-03',$1)", [inv]);
+  ok((await q("SELECT count(*)::int n FROM payments WHERE invoice_id=$1", [inv])).rows[0].n === 1, "payments can be linked to an invoice");
+  await q("DELETE FROM invoices WHERE id=$1", [inv]);
+  ok((await q("SELECT count(*)::int n FROM payments WHERE amount=600 AND paid_on='2026-11-03' AND invoice_id IS NULL")).rows[0].n === 1, "deleting an invoice never deletes payments");
+  ok((await q("SELECT relrowsecurity r FROM pg_class WHERE relname='invoices'")).rows[0].r === true, "invoices has RLS on");
+  ok((await q("SELECT invoice_profile::text p FROM app_settings WHERE id=1")).rows[0].p === "{}", "invoice details default to empty");
   // A fresh project path: schema.sql then migrate_v1_3.sql.
   await q("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
   await q(fs.readFileSync(repo + "schema.sql", "utf8"));
   await q(fs.readFileSync(repo + "migrate_v1_3.sql", "utf8"));
   await q(fs.readFileSync(repo + "migrate_v1_4.sql", "utf8"));
-  ok(true, "fresh install: schema.sql + migrate_v1_3.sql + migrate_v1_4.sql apply cleanly");
+  await q(fs.readFileSync(repo + "migrate_v1_5.sql", "utf8"));
+  ok(true, "fresh install: schema.sql + migrate_v1_3 + v1_4 + v1_5 apply cleanly");
 } catch (e) { console.error("ERROR", e.message); fails++; }
 finally { await c.end(); await server.stop(); }
 console.log(fails ? `${fails} FAILED` : "ALL MIGRATION CHECKS PASSED");

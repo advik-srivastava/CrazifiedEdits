@@ -5,6 +5,8 @@ import Image from "next/image";
 import { ArrowRight, Clapperboard, Eye, Instagram, LockKeyhole, ShieldCheck, Youtube } from "lucide-react";
 import { buildLedger, ledgerTotals, todayAndYesterday, todayInIndia } from "@/lib/billing";
 import { getPublicDashboard } from "@/lib/data";
+import { getPublicInvoices, type PublicInvoice } from "@/lib/invoices-server";
+import { PublicInvoices } from "@/components/public-invoices";
 import { publicLedgerReel } from "@/lib/public-ledger";
 import { isConfigured } from "@/lib/supabase";
 import { Header, OverviewTotals } from "@/components/ui";
@@ -28,10 +30,11 @@ export default async function HomePage() {
   const configured = isConfigured();
   let databaseError = false;
   let dashboard = emptyDashboard();
+  let invoices: PublicInvoice[] = [];
   if (configured) {
     // After the response is sent: refresh from Google Drive if the last sync is over 15 minutes old.
     after(syncIfStale);
-    try { dashboard = await getPublicDashboard(); }
+    try { [dashboard, invoices] = await Promise.all([getPublicDashboard(), getPublicInvoices().catch(() => [])]); }
     catch (error) {
       databaseError = true;
       console.error("Public ledger unavailable:", error instanceof Error ? error.message : "Unknown database error");
@@ -71,6 +74,7 @@ export default async function HomePage() {
         <div id="ledger" className="ledger-anchor" tabIndex={-1} />
         <UnpricedReels reels={dashboard.reels} clientView />
         <WeekLedger weeks={dashboard.weeks} clientView />
+        <PublicInvoices invoices={invoices} />
       </>}
       <div className="public-bottom-strip"><ShieldCheck size={18} aria-hidden /><span>Read-only view. Only the studio admin can edit reels and payments. Opening a Google Drive file may need Drive sharing permission.</span><Link href="/login">Studio login <ArrowRight size={14} aria-hidden /></Link></div>
       <footer className="app-footer"><span>© {todayInIndia().slice(0, 4)} Crazified Studios · Edited by Advik</span><span>For Mohit (@OkayMohit) · ₹600 per reel up to 60 s · Monday–Sunday billing</span></footer>

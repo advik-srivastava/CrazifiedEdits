@@ -39,6 +39,17 @@ Stack: Next.js 16 (App Router, TypeScript) · Supabase Postgres + Auth · Google
 
 Mohit taps **Report a payment** on the homepage, enters the week, amount, date and (optionally) a UPI/transaction ID and screenshot. The week then shows *Payment reported · awaiting confirmation*; balances don't change. In admin, **Payments reported by Mohit** shows the screenshot. **Confirm received** records it as a payment (you can adjust the amount), and **Not received** marks it unconfirmed. Screenshots live in a private Supabase Storage bucket (`payment-proofs`) and are only shown to the admin through 10-minute links.
 
+## Invoices
+
+Admin → **Invoices** creates a PDF invoice (no GST) to download and send to Mohit.
+- **This week's invoice** / **Today's invoice**: one tap each. **Invoice another week or day** covers any past week or date, with an optional note.
+- Lists only delivered, priced reels in the period (₹600 up to 60 s, or the confirmed price). Reels still awaiting a price are left off, with a warning.
+- Numbers run per year: `CE-2026-0001`, `CE-2026-0002`… and are never reused. A period can only be invoiced once (a day inside an invoiced week is refused), so nothing is billed twice; **Void** an invoice to redo it (only if no payment was recorded against it).
+- Each invoice is a snapshot: later edits or deleted reels don't change an invoice already sent.
+- **Record payment through this invoice** (full or part) adds a normal payment for that billing week, linked to the invoice. The weekly balance, the PDF's *Paid / Balance due*, and the client's **Invoices** list (homepage) all update.
+- **Invoice details**: your business name, contact, address, UPI ID, bank details, payment terms, and the client's billing details. Printed on new invoices.
+- The PDF uses DM Sans and Manrope (SIL Open Font License, `assets/fonts/`). Only the admin can download PDFs; the homepage shows invoice number, period, total and status only.
+
 ## Privacy
 
 - All tables have RLS on with **no public policies**. Only the server (service-role key) reads or writes.
@@ -54,10 +65,11 @@ Mohit taps **Report a payment** on the homepage, enters the week, amount, date a
 
 1. Create a project (or keep your existing one; **don't delete its tables**).
 2. In **SQL Editor**:
-   - **New project:** run `sql/schema.sql`, then `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`.
-   - **Existing V1.1:** run `sql/migrate_v1_2_google_drive.sql`, then `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`.
-   - **Existing V1.2 / V1.2.1:** run `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`.
-   - **Already on V1.3:** run `sql/migrate_v1_4.sql`.
+   - **New project:** run `sql/schema.sql`, then `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`.
+   - **Existing V1.1:** run `sql/migrate_v1_2_google_drive.sql`, then `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`.
+   - **Existing V1.2 / V1.2.1:** run `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`.
+   - **Already on V1.3:** run `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`.
+   - **Already on V1.4:** run `sql/migrate_v1_5.sql`.
 
    Migrations are additive, transactional and safe to re-run; they never delete rows.
 3. **Authentication → Users → Add user**: create the admin account with email + password. Put that email in `ADMIN_EMAIL`. Disable public sign-ups (Authentication → Sign In / Providers → turn off "Allow new users to sign up"). Only `ADMIN_EMAIL` accounts can use `/admin` either way.

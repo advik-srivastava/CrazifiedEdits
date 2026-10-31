@@ -8,6 +8,8 @@ import { BILLED_STATES, sundayFor, todayInIndia, withinStandardLength } from "@/
 import { ensureDriveWatch, stopDriveWatch, syncGoogleDrive } from "@/lib/google-drive";
 import type { Reel, ReelStatus } from "@/lib/models";
 import { canPurge, deletePatch, isDeleted, restorePatch } from "@/lib/reel-delete";
+import { createInvoice, INVOICE_MIGRATION_HINT, saveInvoiceProfile } from "@/lib/invoices-server";
+import { invoiceWeekEnding } from "@/lib/invoices";
 
 function fail(error: unknown): never {
   const message = error instanceof Error ? error.message : "Something went wrong";
@@ -259,4 +261,73 @@ export async function rejectClaim(form: FormData) {
     if (!data?.length) throw new Error("This report was already reviewed.");
   } catch (error) { fail(error); }
   success("Report marked as not received. It isn't counted in any balance.", "#claims");
+}
+
+// ------------------------------------------------------------------ invoices
+/** Generate a weekly (Mon–Sun) or daily invoice. The PDF is downloaded from the invoice list. */
+export async function generateInvoice(form: FormData) {
+  await requireAdmin();
+  let message = "";
+  try {
+    const kind = field(form, "kind") === "daily" ? "daily" : "weekly";
+    const date = field(form, "date") || todayInIndia();
+    if (!validDate(date)) throw new Error("Choose a valid date.");
+    if (date > todayInIndia() && kind === "daily") throw new Error("You can't invoice a day that hasn't happened yet.");
+    const invoice = await createInvoice(kind, date, field(form, "notes").slice(0, 1000) || null);
+    message = `Invoice ${invoice.number} created: ${invoice.item_count} reel${invoice.item_count === 1 ? "" : "s"}, ₹${Number(invoice.total).toLocaleString("en-IN")}. Download the PDF below.`;
+  } catch (error) { fail(error); }
+  success(message, "#invoices");
+}
+/** Record money received against an invoice. It's a normal payment for the invoice's week, so the client view updates too. */
+export async function recordInvoicePayment(form: FormData) {
+  await requireAdmin();
+  let message = "";
+  try {
+    const id = uuid(field(form, "id"), "invoice");
+    const db = serviceDb();
+    const { data: inv, error } = await db.from("invoices").select("id,number,period_end,total,status").eq("id", id).single();
+    if (error || !inv) throw new Error("Invoice not found.");
+    if (inv.status === "void") throw new Error("This invoice is void.");
+    const { data: prior } = await db.from("payments").select("amount").eq("invoice_id", id);
+    const balance = Math.round((Number(inv.total) - (prior || []).reduce((s, p) => s + Number(p.amount), 0)) * 100) / 100;
+    if (balance <= 0) throw new Error(`Invoice ${inv.number} is already fully paid.`);
+    const amount = field(form, "amount") ? validAmount(field(form, "amount"), "Amount") : balance;
+    if (amount > balance + 0.005) throw new Error(`That's more than the ₹${balance.toLocaleString("en-IN")} still due on ${inv.number}.`);
+    const paid = field(form, "paid_on") || todayInIndia();
+    if (!validDate(paid)) throw new Error("Enter a valid payment date.");
+    const method = field(form, "method");
+    if (method && !paymentMethods.includes(method)) throw new Error("Choose a valid payment method.");
+    const ref = field(form, "reference").slice(0, 120);
+    const { error: payErr } = await db.from("payments").insert({
+      week_ending: invoiceWeekEnding(inv.period_end), amount, paid_on: paid, method: method || null,
+      note: [`Invoice ${inv.number}`, ref ? `ref ${ref}` : ""].filter(Boolean).join(" · "), invoice_id: id
+    });
+    if (payErr) throw new Error(/invoice_id/.test(payErr.message) ? INVOICE_MIGRATION_HINT : "Could not record the payment.");
+    const left = Math.round((balance - amount) * 100) / 100;
+    message = left > 0 ? `₹${amount.toLocaleString("en-IN")} recorded against ${inv.number}. ₹${left.toLocaleString("en-IN")} still due.` : `${inv.number} is now fully paid. The client view shows it as paid.`;
+  } catch (error) { fail(error); }
+  success(message, "#invoices");
+}
+/** Void an invoice (e.g. created by mistake). Only when nothing has been paid through it. Its number isn't reused. */
+export async function voidInvoice(form: FormData) {
+  await requireAdmin();
+  try {
+    const id = uuid(field(form, "id"), "invoice");
+    const db = serviceDb();
+    const { count } = await db.from("payments").select("id", { count: "exact", head: true }).eq("invoice_id", id);
+    if ((count ?? 0) > 0) throw new Error("Payments were recorded against this invoice. Delete those payments first, then void it.");
+    const { data, error } = await db.from("invoices").update({ status: "void", voided_at: new Date().toISOString() }).eq("id", id).eq("status", "issued").select("number");
+    if (error) throw new Error("Could not void the invoice.");
+    if (!data?.length) throw new Error("This invoice is already void.");
+  } catch (error) { fail(error); }
+  success("Invoice voided. You can now create a new one for that period.", "#invoices");
+}
+export async function saveInvoiceDetails(form: FormData) {
+  await requireAdmin();
+  try {
+    const raw: Record<string, unknown> = {};
+    for (const [k, v] of form.entries()) if (typeof v === "string") raw[k] = v;
+    await saveInvoiceProfile(raw);
+  } catch (error) { fail(error); }
+  success("Invoice details saved. New invoices will use them.", "#invoices");
 }

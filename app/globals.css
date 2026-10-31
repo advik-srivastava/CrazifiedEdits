@@ -361,3 +361,42 @@ ul.mobile-delivery-list,ul.payments-list,.activity-list,.sync-log ul{list-style:
 .deleted-actions>p{margin:0 0 12px}
 .reel-deleted>summary{opacity:.72}
 @media(max-width:760px){.delete-row .button{width:100%}}
+/* Invoices */
+.invoices-panel{padding:22px 24px;margin-bottom:20px;scroll-margin-top:96px}
+.quick-invoices{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:6px 0 12px}
+.quick-invoice{display:flex;align-items:center;gap:12px;padding:14px 16px;border:1px solid var(--border);border-radius:14px;background:linear-gradient(135deg,#f7f5ff,#fff)}
+.quick-invoice>svg{color:var(--primary);flex-shrink:0}
+.quick-invoice>span{flex:1;min-width:0;display:flex;flex-direction:column}
+.quick-invoice strong{font-size:14px}.quick-invoice small{color:#7d8495;font-size:12px;overflow-wrap:anywhere}
+.quick-invoice.done{background:#f3fbf7;border-color:#cdeedd}.quick-invoice.done>svg{color:#07865c}
+.invoice-custom,.invoice-profile{border:1px solid var(--border);border-radius:12px;padding:0 14px;margin:10px 0}
+.invoice-custom>summary,.invoice-profile>summary{min-height:44px;display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:750;font-size:13px;color:#4a5064}
+.invoice-custom[open],.invoice-profile[open]{padding-bottom:14px}
+.invoice-list{display:grid;gap:10px;margin-top:14px}
+.invoice-item{border:1px solid var(--border);border-radius:14px;background:#fff}
+.invoice-item>summary{list-style:none;display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;min-height:56px}
+.invoice-item>summary::-webkit-details-marker{display:none}
+.invoice-icon{width:38px;height:38px;border-radius:11px;background:#f1efff;color:var(--primary);display:grid;place-items:center;flex-shrink:0}
+.invoice-main{flex:1;min-width:0;display:flex;flex-direction:column}.invoice-main strong{font-size:14px}.invoice-main small{color:#7d8495;font-size:12px;overflow-wrap:anywhere}
+.invoice-amounts{display:flex;flex-direction:column;align-items:flex-end;text-align:right}.invoice-amounts strong{font-family:Manrope,sans-serif;font-size:16px;font-weight:800}.invoice-amounts small{color:#7d8495;font-size:11px;white-space:nowrap}
+.invoice-paid .invoice-icon{background:#e9f8f2;color:#07865c}.invoice-void{opacity:.65}
+.invoice-pane{padding:0 16px 16px;border-top:1px solid #f0f1f5}
+.invoice-actions{display:flex;flex-wrap:wrap;gap:10px;padding-top:14px}
+.invoice-pane>.mini-note{margin:10px 0}
+.invoice-payments{list-style:none;margin:0 0 10px;padding:0;display:grid;gap:6px;font-size:12px;color:#07865c;font-weight:700}
+.invoice-payments li{display:flex;align-items:center;gap:6px}
+.invoice-pay-form{margin-top:6px;padding-top:12px;border-top:1px dashed var(--border)}
+.invoice-pay-form .eyebrow{display:flex;align-items:center;gap:6px}
+.invoices-public{padding:22px 24px;margin:19px 0}
+.invoice-public-list{list-style:none;margin:12px 0 0;padding:0}
+.invoice-public-list li{display:flex;align-items:center;gap:12px;padding:13px 2px;border-top:1px solid #f0f1f5}
+@media(max-width:760px){
+  .invoices-panel,.invoices-public{padding:18px 16px}
+  .quick-invoices{grid-template-columns:1fr}
+  .quick-invoice{flex-wrap:wrap}.quick-invoice .button{width:100%}
+  .invoice-item>summary,.invoice-public-list li{flex-wrap:wrap}
+  .invoice-main{flex-basis:calc(100% - 50px)}
+  .invoice-amounts{align-items:flex-start;text-align:left;margin-left:50px;flex:1}
+  .invoice-actions .button{flex:1 1 140px}
+  .invoice-pay-form .button{width:100%}
+}

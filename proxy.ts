@@ -19,4 +19,4 @@ export async function proxy(request: NextRequest) {
   await supabase.auth.getClaims();
   return response;
 }
-export const config = { matcher: ["/admin/:path*", "/login", "/api/gdrive/connect", "/api/gdrive/callback", "/api/gdrive/sync"] };
+export const config = { matcher: ["/admin/:path*", "/login", "/api/gdrive/connect", "/api/gdrive/callback", "/api/gdrive/sync", "/api/invoices/:path*"] };
