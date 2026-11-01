@@ -1,8 +1,8 @@
 "use client";
 import { useMemo, useState } from "react";
-import { useFormStatus } from "react-dom";
+import { SubmitButton, confirmSubmit } from "./forms";
 import { CalendarDays, CalendarRange, CheckCircle2, ChevronDown, Download, Eye, FileText, Settings2, Trash2, Wallet, XCircle } from "lucide-react";
-import type { WeekSummary } from "@/lib/models";
+import type { WeekBrief } from "@/lib/models";
 import type { AdminInvoice } from "@/lib/invoices-server";
 import { historyTab, payStateLabel, periodLabel, periodsOverlap, type InvoiceHistoryTab, type InvoiceProfile } from "@/lib/invoices";
 import { CALENDAR_END, CALENDAR_START, formatINR, prettyDate, sundayFor, weekYear } from "@/lib/billing";
@@ -11,18 +11,13 @@ import { deleteVoidInvoice, generateInvoice, recordInvoicePayment, saveInvoiceDe
 import { Empty, Pill, SectionHeading } from "./ui";
 
 const tone = { unpaid: "red", partial: "orange", paid: "green", void: "neutral" } as const;
-function Submit({ children, variant = "primary", pending = "Working…", className = "" }: { children: React.ReactNode; variant?: string; pending?: string; className?: string }) {
-  const { pending: busy } = useFormStatus();
-  return <button type="submit" className={`button ${variant} ${className}`} disabled={busy} aria-busy={busy}>{busy ? pending : children}</button>;
-}
-const confirmSubmit = (msg: string) => (e: React.FormEvent<HTMLFormElement>) => { if (!confirm(msg)) e.preventDefault(); };
 
 const YEARS = Array.from({ length: Number(CALENDAR_END.slice(0, 4)) - Number(CALENDAR_START.slice(0, 4)) + 1 }, (_, k) => String(Number(CALENDAR_START.slice(0, 4)) + k));
 const covering = (invoices: AdminInvoice[], start: string, end: string) =>
   invoices.filter(i => i.status === "issued" && periodsOverlap({ start, end }, { start: i.period_start, end: i.period_end }));
 
 /** Weekly invoice (the main one): same Year / Week choice as the weekly reel log. */
-function WeeklyInvoice({ weeks, today, invoices }: { weeks: WeekSummary[]; today: string; invoices: AdminInvoice[] }) {
+function WeeklyInvoice({ weeks, today, invoices }: { weeks: WeekBrief[]; today: string; invoices: AdminInvoice[] }) {
   const ordered = useMemo(() => [...weeks].sort((a, b) => a.ending.localeCompare(b.ending)), [weeks]);
   const current = sundayFor(today);
   const [ending, setEnding] = useState(current);
@@ -49,7 +44,7 @@ function WeeklyInvoice({ weeks, today, invoices }: { weeks: WeekSummary[]; today
       : <form action={generateInvoice} className="weekly-invoice-go">
           <input type="hidden" name="kind" value="weekly" /><input type="hidden" name="date" value={week.starting} />
           <input name="notes" maxLength={1000} placeholder="Note on the invoice (optional)" aria-label="Note on the invoice" />
-          <Submit pending="Generating…" className="weekly-invoice-button"><FileText size={16} aria-hidden /> Generate weekly invoice</Submit>
+          <SubmitButton pendingLabel="Generating…" className="weekly-invoice-button"><FileText size={16} aria-hidden /> Generate weekly invoice</SubmitButton>
           {dailies.length > 0 && <small className="muted">Replaces daily invoice{dailies.length === 1 ? "" : "s"} {dailies.map(d => d.number).join(", ")} for this week; payments on {dailies.length === 1 ? "it" : "them"} carry over.</small>}
         </form>}
   </div>;
@@ -62,20 +57,21 @@ function TodayInvoice({ today, todayCount, todayBilled, invoices }: { today: str
     <span><strong>Today&apos;s invoice</strong><small>{prettyDate(today)} · {todayCount} reel{todayCount === 1 ? "" : "s"} delivered today · {formatINR(todayBilled)}</small></span>
     {onDay
       ? <a className="button secondary" href={`/api/invoices/${onDay.id}/pdf`} title={`Already on ${onDay.number}`}><Download size={16} aria-hidden /> {onDay.number}</a>
-      : <form action={generateInvoice}><input type="hidden" name="kind" value="daily" /><input type="hidden" name="date" value={today} /><Submit variant="secondary" pending="Generating…"><FileText size={16} aria-hidden /> Generate</Submit></form>}
+      : <form action={generateInvoice}><input type="hidden" name="kind" value="daily" /><input type="hidden" name="date" value={today} /><SubmitButton variant="secondary" pendingLabel="Generating…"><FileText size={16} aria-hidden /> Generate</SubmitButton></form>}
   </div>;
 }
 function InvoiceRow({ inv }: { inv: AdminInvoice }) {
   const [amount, setAmount] = useState(String(inv.balance));
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
-  return <details className={`invoice-item invoice-${inv.state}`}>
+  const [open, setOpen] = useState(false);
+  return <details className={`invoice-item invoice-${inv.state}`} onToggle={e => setOpen(e.currentTarget.open)}>
     <summary>
       <span className="invoice-icon"><FileText size={20} aria-hidden /></span>
       <span className="invoice-main"><strong>{inv.number}</strong><small>{inv.kind === "weekly" ? "Weekly" : "Daily"} · {periodLabel(inv.kind, inv.period_start, inv.period_end, prettyDate)} · {inv.item_count} reel{inv.item_count === 1 ? "" : "s"} · issued {prettyDate(inv.issue_date)}</small></span>
       <span className="invoice-amounts"><strong>{formatINR(inv.total)}</strong><small>{inv.state === "paid" && inv.paidOn ? `Paid ${prettyDate(inv.paidOn)}` : inv.state === "void" ? (inv.replacedBy ? `Replaced by ${inv.replacedBy}` : "Void") : inv.balance > 0 ? `${formatINR(inv.balance)} due` : "Settled"}</small></span>
       <Pill tone={tone[inv.state]}>{payStateLabel[inv.state]}</Pill>
     </summary>
-    <div className="invoice-pane">
+    {open && <div className="invoice-pane">
       <div className="invoice-actions">
         <a className="button primary" href={`/api/invoices/${inv.id}/pdf`}><Download size={16} aria-hidden /> Download PDF</a>
         <a className="button secondary" href={`/api/invoices/${inv.id}/pdf?inline=1`} target="_blank" rel="noopener noreferrer"><Eye size={16} aria-hidden /> Preview</a>
@@ -90,19 +86,19 @@ function InvoiceRow({ inv }: { inv: AdminInvoice }) {
         <div className="field"><label htmlFor={`d-${inv.id}`}>Date received</label><input id={`d-${inv.id}`} name="paid_on" type="date" defaultValue={today} required /></div>
         <div className="field"><label htmlFor={`m-${inv.id}`}>Method <span className="optional">optional</span></label><select id={`m-${inv.id}`} name="method" defaultValue="UPI"><option value="">Not specified</option>{paymentMethods.map(m => <option key={m} value={m}>{m}</option>)}</select></div>
         <div className="field"><label htmlFor={`r-${inv.id}`}>Reference <span className="optional">optional, private</span></label><input id={`r-${inv.id}`} name="reference" maxLength={120} placeholder="UPI / bank ref" /></div>
-        <div className="wide edit-footer"><span className="muted mini-note">Counts for the week of {prettyDate(inv.period_end)} and updates the client view.</span><Submit pending="Saving…"><CheckCircle2 size={16} aria-hidden /> {Number(amount) >= inv.balance ? "Mark as paid" : "Record part payment"}</Submit></div>
+        <div className="wide edit-footer"><span className="muted mini-note">Counts for the week of {prettyDate(inv.period_end)} and updates the client view.</span><SubmitButton pendingLabel="Saving…"><CheckCircle2 size={16} aria-hidden /> {Number(amount) >= inv.balance ? "Mark as paid" : "Record part payment"}</SubmitButton></div>
       </form>}
       {inv.state !== "void" && inv.payments.length === 0 && <form action={voidInvoice} className="delete-row" onSubmit={confirmSubmit(`Void ${inv.number}? It stays in your records as void (its number isn't reused) and you can create a new invoice for this period.`)}>
         <input type="hidden" name="id" value={inv.id} />
         <span className="muted mini-note">Made a mistake? Void it and generate a new one.</span>
-        <Submit variant="danger" pending="Voiding…"><XCircle size={16} aria-hidden /> Void invoice</Submit>
+        <SubmitButton variant="danger" pendingLabel="Voiding…"><XCircle size={16} aria-hidden /> Void invoice</SubmitButton>
       </form>}
       {inv.state === "void" && inv.payments.length === 0 && <form action={deleteVoidInvoice} className="delete-row" onSubmit={confirmSubmit(`Delete ${inv.number} completely? Only do this if you never sent it to the client.`)}>
         <input type="hidden" name="id" value={inv.id} />
         <span className="muted mini-note">Never sent it (e.g. a test)? Delete it. If it&apos;s the latest invoice, its number will be used again.</span>
-        <Submit variant="danger" pending="Deleting…"><Trash2 size={16} aria-hidden /> Delete invoice</Submit>
+        <SubmitButton variant="danger" pendingLabel="Deleting…"><Trash2 size={16} aria-hidden /> Delete invoice</SubmitButton>
       </form>}
-    </div>
+    </div>}
   </details>;
 }
 function ProfileForm({ profile }: { profile: InvoiceProfile }) {
@@ -126,12 +122,12 @@ function ProfileForm({ profile }: { profile: InvoiceProfile }) {
       {f("client_email", "Client email", { type: "email", wide: true })}
       {f("client_address", "Client address", { area: true })}
       {f("footer_note", "Thank-you note", { area: true })}
-      <div className="wide align-end"><Submit pending="Saving…">Save details</Submit></div>
+      <div className="wide align-end"><SubmitButton pendingLabel="Saving…">Save details</SubmitButton></div>
     </form>
   </details>;
 }
 
-export function InvoicesPanel({ invoices: incoming, profile, today, ready, weeks, todayCount, todayBilled }: { invoices: AdminInvoice[]; profile: InvoiceProfile; today: string; ready: boolean; weeks: WeekSummary[]; todayCount: number; todayBilled: number }) {
+export function InvoicesPanel({ invoices: incoming, profile, today, ready, weeks, todayCount, todayBilled }: { invoices: AdminInvoice[]; profile: InvoiceProfile; today: string; ready: boolean; weeks: WeekBrief[]; todayCount: number; todayBilled: number }) {
   const [shown, setShown] = useState(10);
   const [tab, setTab] = useState<InvoiceHistoryTab>("recent");
   // Newest generated first, whatever order the data arrives in.
@@ -155,7 +151,7 @@ export function InvoicesPanel({ invoices: incoming, profile, today, ready, weeks
         <input type="hidden" name="kind" value="daily" />
         <div className="field"><label htmlFor="inv-date">Date</label><input id="inv-date" name="date" type="date" defaultValue={today} max={today} required /></div>
         <div className="field wide"><label htmlFor="inv-notes">Note on the invoice <span className="optional">optional</span></label><input id="inv-notes" name="notes" maxLength={1000} placeholder="e.g. Includes the revision requested on 29 Oct" /></div>
-        <div className="wide align-end"><Submit pending="Generating…"><FileText size={16} aria-hidden /> Generate invoice</Submit></div>
+        <div className="wide align-end"><SubmitButton pendingLabel="Generating…"><FileText size={16} aria-hidden /> Generate invoice</SubmitButton></div>
       </form>
     </details>
     {invoices.length > 0 && <div className="invoice-history-head">

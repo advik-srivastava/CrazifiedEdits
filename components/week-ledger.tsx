@@ -4,7 +4,7 @@ import { useFormStatus } from "react-dom";
 import { generateInvoice } from "@/app/admin/actions";
 import { ArrowUpRight, CalendarDays, Clapperboard, CreditCard, Wallet, CheckCircle2, Video, ChevronDown, ChevronLeft, ChevronRight, AlertCircle, Hourglass, FileText, Download } from "lucide-react";
 import type { LedgerReel, WeekSummary } from "@/lib/models";
-import { CALENDAR_END, CALENDAR_START, durationLabel, formatINR, prettyDate, pricingState, reelFee, sundayFor, todayInIndia, weekStatus, weekStatusLabel, weekYear } from "@/lib/billing";
+import { CALENDAR_END, CALENDAR_START, durationLabel, formatINR, prettyDate, pricingState, reelFee, sundayFor, todayInIndia, fillWeeks, weekStatus, weekStatusLabel, weekYear } from "@/lib/billing";
 import { Empty, Pill, SectionHeading, StatCard, Status } from "./ui";
 
 const YEARS = Array.from({ length: Number(CALENDAR_END.slice(0, 4)) - Number(CALENDAR_START.slice(0, 4)) + 1 }, (_, i) => String(Number(CALENDAR_START.slice(0, 4)) + i));
@@ -61,7 +61,9 @@ function InvoiceSubmit() {
   const { pending } = useFormStatus();
   return <button type="submit" className="button primary" disabled={pending} aria-busy={pending}>{pending ? "Generating…" : "Generate weekly invoice"}</button>;
 }
-export function WeekLedger({ weeks, clientView = false, weekInvoices }: { weeks: WeekSummary[]; clientView?: boolean; weekInvoices?: Record<string, WeekInvoiceLink> }) {
+export function WeekLedger({ weeks: sparse, clientView = false, weekInvoices }: { weeks: WeekSummary[]; clientView?: boolean; weekInvoices?: Record<string, WeekInvoiceLink> }) {
+  // The server sends only weeks with activity; empty weeks are rebuilt here so every week stays selectable.
+  const weeks = useMemo(() => fillWeeks(sparse, todayInIndia()), [sparse]);
   const current = sundayFor(todayInIndia());
   const ordered = useMemo(() => [...weeks].sort((a, b) => a.ending.localeCompare(b.ending)), [weeks]);
   const [end, setEnd] = useState(weeks.some(w => w.ending === current) ? current : weeks[0]?.ending || "");

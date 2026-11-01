@@ -8,8 +8,8 @@ import { getConnection, getDashboard, getSettings, getSyncEvents } from "@/lib/d
 import { getClaimsForAdmin } from "@/lib/claims-server";
 import { ClaimsPanel } from "@/components/claims-panel";
 import { InvoicesPanel } from "@/components/invoices-panel";
-import { getInvoiceProfile, getInvoicesForAdmin, invoicesReady } from "@/lib/invoices-server";
-import { payStateLabel } from "@/lib/invoices";
+import { getInvoicesForAdmin } from "@/lib/invoices-server";
+import { normalizeProfile, payStateLabel } from "@/lib/invoices";
 import { isConfigured } from "@/lib/supabase";
 import { Header, OverviewTotals, Pill } from "@/components/ui";
 import { WeekLedger, UnpricedReels } from "@/components/week-ledger";
@@ -18,7 +18,8 @@ import { AutoRefresh, OfflineBanner } from "@/components/live";
 import { Toast } from "@/components/toast";
 import { AddReelForm, AdminReelList, ClientLink, GoogleDrivePanel, PaymentEntry } from "@/components/admin-panels";
 import { adminLedgerReel } from "@/lib/public-ledger";
-import { todayInIndia } from "@/lib/billing";
+import { briefWeek } from "@/lib/models";
+import { activeWeeks, pricingState, todayInIndia } from "@/lib/billing";
 
 /** True while Drive change notifications are registered and unexpired. */
 function watchActive(expires: string | null | undefined): boolean {
@@ -40,8 +41,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const params = await searchParams;
   let data;
   try {
-    const [dashboard, settings, connection, events, claims, invoices, profile, ready] = await Promise.all([getDashboard(), getSettings(), getConnection(), getSyncEvents(), getClaimsForAdmin(), getInvoicesForAdmin(), getInvoiceProfile(), invoicesReady()]);
-    data = { dashboard, settings, connection, events, claims, invoices, profile, ready };
+    const [dashboard, settings, connection, events, claims, invoiceList] = await Promise.all([getDashboard(), getSettings(), getConnection(), getSyncEvents(), getClaimsForAdmin(), getInvoicesForAdmin()]);
+    data = { dashboard, settings, connection, events, claims, invoices: invoiceList.invoices, ready: invoiceList.ready, profile: normalizeProfile(settings.invoice_profile) };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error("Admin dashboard unavailable:", message);
@@ -62,12 +63,12 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       {pendingClaims > 0 && <a href="#claims" className="claims-banner"><span className="live-dot" />Mohit reported {pendingClaims} payment{pendingClaims === 1 ? "" : "s"}. Review {pendingClaims === 1 ? "it" : "them"} →</a>}
       <OverviewTotals totals={dashboard.totals} />
       <ActivityPanel daily={dashboard.daily} sync={sync} />
-      <UnpricedReels reels={dashboard.reels.filter(r => r.delivery_date).map(adminLedgerReel)} />
-      <WeekLedger weeks={dashboard.weeks} weekInvoices={Object.fromEntries(invoices.filter(i => i.kind === "weekly" && i.status === "issued").map(i => [i.period_end, { id: i.id, number: i.number, state: payStateLabel[i.state] }]))} />
+      <UnpricedReels reels={dashboard.reels.filter(r => r.delivery_date && !r.deleted_at && pricingState(r) === "review").map(adminLedgerReel)} />
+      <WeekLedger weeks={activeWeeks(dashboard.weeks)} weekInvoices={Object.fromEntries(invoices.filter(i => i.kind === "weekly" && i.status === "issued").map(i => [i.period_end, { id: i.id, number: i.number, state: payStateLabel[i.state] }]))} />
       <div className="admin-section-head"><div><div className="eyebrow">YOUR CONTROL CENTER</div><h2>Manage deliveries</h2><p>Connect Google Drive, review new uploads, mark deliveries and record Mohit&apos;s payments. The homepage shows only delivered reels and weekly settlements.</p></div><a href="#reels" className="button secondary"><Video size={16} aria-hidden />Review videos</a></div>
       <div className="admin-two-col"><GoogleDrivePanel settings={settings} connection={connection} events={events} syncInProgress={syncRunning(settings.sync_lock_until)} instant={!webhookAddress() ? "unavailable" : watchActive(settings.watch_expires_at) ? "on" : "off"} /><AddReelForm /></div>
       <AdminReelList reels={dashboard.reels} />
-      <InvoicesPanel invoices={invoices} profile={profile} today={todayInIndia()} ready={ready} weeks={dashboard.weeks} todayCount={dashboard.daily.today.delivered} todayBilled={dashboard.daily.today.billed} />
+      <InvoicesPanel invoices={invoices} profile={profile} today={todayInIndia()} ready={ready} weeks={dashboard.weeks.filter(w => w.starting <= todayInIndia()).map(briefWeek)} todayCount={dashboard.daily.today.delivered} todayBilled={dashboard.daily.today.billed} />
       <ClaimsPanel claims={claims} />
       <div className="admin-two-col lower"><PaymentEntry payments={dashboard.payments} /><section className="surface sharing-panel"><div className="eyebrow">CLIENT ACCESS</div><h2>Share the live ledger</h2><p>Mohit can open the homepage to see delivered reels, Drive links and payments without signing in. Only you can edit records.</p><ClientLink url={clientUrl} /><div className="sharing-note"><ShieldCheck size={17} aria-hidden /><span>The homepage is public to anyone with the URL and is hidden from search engines. It never shows notes, payment references, pending uploads or account settings. Google Drive files still follow their own Drive sharing settings.</span></div></section></div>
       <footer className="app-footer"><span>© {todayInIndia().slice(0, 4)} Crazified Studios • Edited by Advik</span><span>Monday–Sunday billing · ₹600 per reel up to 60 s</span></footer>

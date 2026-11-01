@@ -135,6 +135,19 @@ export function buildLedger(reels: LedgerReel[], payments: Payment[], today: str
 }
 function roundMoney(n: number): number { return Math.round(n * 100) / 100; }
 
+/** Weeks that have anything in them. Pages send only these; the browser fills in the empty ones (see fillWeeks). */
+export function activeWeeks(weeks: WeekSummary[]): WeekSummary[] {
+  return weeks.filter(w => w.reels.length || w.payments.length || w.reported.length);
+}
+/** Rebuild the full Monday–Sunday calendar (2026–2030, plus any week with data) from a sparse list, newest first. */
+export function fillWeeks(weeks: WeekSummary[], today: string): WeekSummary[] {
+  const map = new Map(weeks.map(w => [w.ending, w]));
+  const empty = (ending: string): WeekSummary => ({ ending, starting: shiftISODate(ending, -6), count: 0, delivered: 0, reviewCount: 0, billed: 0, received: 0, due: 0, reels: [], payments: [], reported: [] });
+  for (const p of billingCalendar()) if (!map.has(p.ending)) map.set(p.ending, empty(p.ending));
+  const current = sundayFor(today);
+  if (!map.has(current)) map.set(current, empty(current));
+  return [...map.values()].sort((a, b) => b.ending.localeCompare(a.ending));
+}
 export function weekStatus(week: Pick<WeekSummary, "billed" | "received">): WeekPaymentStatus {
   if (week.billed <= 0 && week.received <= 0) return "no_charges";
   if (week.received >= week.billed) return "paid";

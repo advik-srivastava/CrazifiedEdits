@@ -73,6 +73,8 @@ export type Settings = {
   watch_token?: string | null;
   watch_expires_at?: string | null;
   last_change_at?: string | null;
+  // V1.5
+  invoice_profile?: unknown;
 };
 export type Connection = { id: number; account_email: string | null; account_name: string | null; refresh_token_ciphertext: string; connected_at: string; connected_by?: string | null };
 export type SyncEvent = {
@@ -125,6 +127,9 @@ export type WeekSummary = {
   /** Client-reported payments awaiting confirmation (not counted in received). */
   reported: PublicClaim[];
 };
+/** Just the numbers of a week, for pickers that don't need its reels or payments. */
+export type WeekBrief = Pick<WeekSummary, "ending" | "starting" | "count" | "billed" | "reviewCount" | "due">;
+export const briefWeek = (w: WeekSummary): WeekBrief => ({ ending: w.ending, starting: w.starting, count: w.count, billed: w.billed, reviewCount: w.reviewCount, due: w.due });
 export type DayActivity = {
   date: string;
   uploaded: number;

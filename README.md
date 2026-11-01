@@ -24,6 +24,12 @@ Stack: Next.js 16 (App Router, TypeScript) · Supabase Postgres + Auth · Google
 - **Upload date ≠ delivery date.** Today/Yesterday (India time) count uploads by the Drive file's creation time, and deliveries/billing by delivery date.
 - **Stable history:** once a reel is past review its duration is locked against Drive changes; renames update the title of the same record; files removed from Drive are flagged, never deleted. Delivered reels can't be removed with one click; correct them deliberately in Edit.
 
+## Changes delivered after the week ended
+
+Delivered on Sunday, client asks for changes, you upload them on Monday? Two tools in each reel's Edit panel:
+- **Count in last week**: one tap moves a delivered reel into the previous Monday–Sunday week. Or choose any week from its delivery week back to 4 weeks earlier under **Counts in billing week**. Weekly totals, balances and weekly invoices follow the billing week; Today/Yesterday keep the real delivery date; the weekly log marks it *counted in this week*. If that week was already invoiced you're told, since invoices are snapshots.
+- **Revised version of an earlier reel**: pick the original. The revision is delivered, counts in the **original's** week, and the original is removed from billing (restorable from *Deleted*), so the client is charged once. Auto-sync recognises revised file names (`v2`, `final`, `revised`, `changes`, `Copy of…`, `(1)`), holds them in Pending review instead of auto-billing, and pre-selects the likely original.
+
 ## Google Drive sync
 
 - OAuth 2.0 with PKCE; scopes are the minimum needed: `drive.metadata.readonly`, `openid`, `email`, `profile`. The app can't read video contents, edit or share files.
@@ -68,12 +74,13 @@ Admin → **Invoices** creates PDF invoices (no GST) to download and send to Moh
 
 1. Create a project (or keep your existing one; **don't delete its tables**).
 2. In **SQL Editor**:
-   - **New project:** run `sql/schema.sql`, then `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`, then `sql/migrate_v1_6.sql`.
-   - **Existing V1.1:** run `sql/migrate_v1_2_google_drive.sql`, then `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`, then `sql/migrate_v1_6.sql`.
-   - **Existing V1.2 / V1.2.1:** run `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`, then `sql/migrate_v1_6.sql`.
-   - **Already on V1.3:** run `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`, then `sql/migrate_v1_6.sql`.
-   - **Already on V1.4:** run `sql/migrate_v1_5.sql`, then `sql/migrate_v1_6.sql`.
-   - **Already on V1.5:** run `sql/migrate_v1_6.sql`.
+   - **New project:** run `sql/schema.sql`, then `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`, then `sql/migrate_v1_6.sql`, then `sql/migrate_v1_7.sql`.
+   - **Existing V1.1:** run `sql/migrate_v1_2_google_drive.sql`, then `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`, then `sql/migrate_v1_6.sql`, then `sql/migrate_v1_7.sql`.
+   - **Existing V1.2 / V1.2.1:** run `sql/migrate_v1_3.sql`, then `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`, then `sql/migrate_v1_6.sql`, then `sql/migrate_v1_7.sql`.
+   - **Already on V1.3:** run `sql/migrate_v1_4.sql`, then `sql/migrate_v1_5.sql`, then `sql/migrate_v1_6.sql`, then `sql/migrate_v1_7.sql`.
+   - **Already on V1.4:** run `sql/migrate_v1_5.sql`, then `sql/migrate_v1_6.sql`, then `sql/migrate_v1_7.sql`.
+   - **Already on V1.5:** run `sql/migrate_v1_6.sql`, then `sql/migrate_v1_7.sql`.
+   - **Already on V1.6:** run `sql/migrate_v1_7.sql`.
 
    Migrations are additive, transactional and safe to re-run; they never delete rows.
 3. **Authentication → Users → Add user**: create the admin account with email + password. Put that email in `ADMIN_EMAIL`. Disable public sign-ups (Authentication → Sign In / Providers → turn off "Allow new users to sign up"). Only `ADMIN_EMAIL` accounts can use `/admin` either way.

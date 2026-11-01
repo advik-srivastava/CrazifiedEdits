@@ -1,9 +1,9 @@
-CRAZIFIEDEDITS V1.6 · BY CRAZIFIED STUDIOS
+CRAZIFIEDEDITS V1.7 · BY CRAZIFIED STUDIOS
 Quick start on Windows. README.md has the full guide (Supabase, Google Cloud, Vercel).
 
 UPGRADING FROM V1.2 / V1.2.1 (your Supabase data is kept):
 1. Pull the latest code from GitHub (or extract the new ZIP into a NEW folder).
-2. Supabase -> SQL Editor -> run sql/migrate_v1_3.sql, then sql/migrate_v1_4.sql, then sql/migrate_v1_5.sql, then sql/migrate_v1_6.sql (each: New query, paste, Run).
+2. Supabase -> SQL Editor -> run sql/migrate_v1_3.sql, then sql/migrate_v1_4.sql, then sql/migrate_v1_5.sql, then sql/migrate_v1_6.sql, then sql/migrate_v1_7.sql (each: New query, paste, Run).
    It only ADDS columns/tables; it never deletes reels or payments. Safe to re-run.
    Do NOT re-run sql/schema.sql.
    (Still on V1.1? Run sql/migrate_v1_2_google_drive.sql first, then migrate_v1_3.sql.)
@@ -14,7 +14,7 @@ UPGRADING FROM V1.2 / V1.2.1 (your Supabase data is kept):
 5. Open http://localhost:3000 (client dashboard) and http://localhost:3000/login (admin).
 
 NEW SETUP:
-1. Supabase: run sql/schema.sql, then sql/migrate_v1_3.sql, sql/migrate_v1_4.sql, sql/migrate_v1_5.sql and sql/migrate_v1_6.sql. Create the admin user under
+1. Supabase: run sql/schema.sql, then sql/migrate_v1_3.sql, sql/migrate_v1_4.sql, sql/migrate_v1_5.sql, sql/migrate_v1_6.sql and sql/migrate_v1_7.sql. Create the admin user under
    Authentication -> Users.
 2. Copy .env.example to .env.local and fill it in. Generate secrets with:
      node scripts/generate-secrets.mjs
@@ -33,3 +33,4 @@ DAILY USE:
 
 CHECK EVERYTHING:  npm run verify   (lint, types, tests, production build)
 - Invoices: Admin -> Invoices -> pick the week -> Generate weekly invoice -> Download PDF (CS-MS-01.pdf). Record payments against an invoice there.
+- Changes uploaded the next week: open the reel -> "Count in last week", or "Revised version of" the original reel.

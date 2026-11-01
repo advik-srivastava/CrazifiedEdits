@@ -50,16 +50,16 @@ function summarize(row: InvoiceRow, payments: { id: string; amount: number; paid
 }
 
 /** Invoices for the admin, newest first, with what's been paid through each. [] before the migration. */
-export async function getInvoicesForAdmin(limit = 1000): Promise<AdminInvoice[]> {
+export async function getInvoicesForAdmin(limit = 1000): Promise<{ invoices: AdminInvoice[]; ready: boolean }> {
   noStore();
   const { data, error } = await serviceDb().from("invoices")
     .select("*")
     .order("created_at", { ascending: false }).limit(limit);
-  if (error || !data) return [];
+  if (error || !data) return { invoices: [], ready: false };
   const rows = data as InvoiceRow[];
   const pays = await paymentsByInvoice(rows.map(r => r.id));
   const numberOf = new Map(rows.map(r => [r.id, r.number]));
-  return rows.map(r => { const p = pays.get(r.id) || []; const s = summarize(r, p); const { items: _i, profile: _p, ...rest } = r; void _i; void _p; return { ...rest, total: s.total, paid: s.paid, balance: s.balance, state: s.state, payments: p, paidOn: s.state === "paid" ? fullyPaidOn(s.total, p) : null, replacedBy: r.superseded_by ? numberOf.get(r.superseded_by) ?? null : null }; });
+  return { ready: true, invoices: rows.map(r => { const p = pays.get(r.id) || []; const s = summarize(r, p); const { items: _i, profile: _p, ...rest } = r; void _i; void _p; return { ...rest, total: s.total, paid: s.paid, balance: s.balance, state: s.state, payments: p, paidOn: s.state === "paid" ? fullyPaidOn(s.total, p) : null, replacedBy: r.superseded_by ? numberOf.get(r.superseded_by) ?? null : null }; }) };
 }
 /** What the client page shows: number, period, dates, total, paid and status. No line items, notes or IDs. */
 export async function getPublicInvoices(limit = 200): Promise<PublicInvoice[]> {
@@ -161,9 +161,4 @@ export async function invoicePdf(id: string): Promise<{ number: string; bytes: U
     items: row.items, total: s.total, paid: s.paid, profile: normalizeProfile(row.profile), notes: row.notes, voided: row.status === "void"
   }, await assets());
   return { number: row.number, bytes };
-}
-/** True once sql/migrate_v1_5.sql has been run. */
-export async function invoicesReady(): Promise<boolean> {
-  const { error } = await serviceDb().from("invoices").select("id", { head: true, count: "exact" }).limit(1);
-  return !error;
 }

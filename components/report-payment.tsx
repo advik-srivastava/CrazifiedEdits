@@ -2,7 +2,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, ImagePlus, Send, X, AlertCircle, ReceiptIndianRupee } from "lucide-react";
-import type { WeekSummary } from "@/lib/models";
+import type { WeekBrief } from "@/lib/models";
 import { formatINR, prettyDate, sundayFor, todayInIndia } from "@/lib/billing";
 
 const METHODS = ["UPI", "Bank transfer", "Cash", "Other"];
@@ -26,7 +26,7 @@ async function compress(file: File): Promise<Blob> {
  * "I've paid" form for the client. The report shows on the week as "awaiting confirmation";
  * the screenshot and reference are only visible to the admin, who confirms it into a payment.
  */
-export function ReportPayment({ weeks }: { weeks: WeekSummary[] }) {
+export function ReportPayment({ weeks }: { weeks: WeekBrief[] }) {
   const router = useRouter();
   const today = todayInIndia();
   const current = sundayFor(today);

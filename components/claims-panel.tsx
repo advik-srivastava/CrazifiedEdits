@@ -1,16 +1,12 @@
 "use client";
 import { useState } from "react";
-import { useFormStatus } from "react-dom";
+import { SubmitButton } from "./forms";
 import { CheckCircle2, ImageOff, Inbox, XCircle, ZoomIn } from "lucide-react";
 import type { AdminClaimView } from "@/lib/models";
 import { formatINR, prettyDate, prettyDateTime, shiftISODate } from "@/lib/billing";
 import { confirmClaim, rejectClaim } from "@/app/admin/actions";
 import { Pill, SectionHeading } from "./ui";
 
-function Submit({ children, variant, label }: { children: React.ReactNode; variant: "primary" | "subtle"; label: string }) {
-  const { pending } = useFormStatus();
-  return <button className={`button ${variant}`} type="submit" disabled={pending} aria-busy={pending}>{pending ? label : children}</button>;
-}
 const tone = { pending: "orange", confirmed: "green", rejected: "neutral" } as const;
 const label = { pending: "Awaiting your review", confirmed: "Confirmed", rejected: "Not received" } as const;
 
@@ -37,12 +33,12 @@ export function ClaimsPanel({ claims }: { claims: AdminClaimView[] }) {
           <form action={confirmClaim} className="claim-confirm"><input type="hidden" name="id" value={c.id} />
             <label className="sr-only" htmlFor={`amt-${c.id}`}>Amount to record</label>
             <input id={`amt-${c.id}`} name="amount" type="number" inputMode="decimal" min="0.01" step="0.01" defaultValue={Number(c.amount)} aria-describedby={`amt-h-${c.id}`} />
-            <Submit variant="primary" label="Confirming…"><CheckCircle2 size={16} aria-hidden /> Confirm received</Submit>
+            <SubmitButton variant="primary" pendingLabel="Confirming…"><CheckCircle2 size={16} aria-hidden /> Confirm received</SubmitButton>
             <small id={`amt-h-${c.id}`} className="form-hint">Change the amount if it differs from what arrived.</small>
           </form>
           <form action={rejectClaim} className="claim-reject" onSubmit={e => { if (!confirm("Mark this report as not received? Mohit will see it as not confirmed.")) e.preventDefault(); }}>
             <input type="hidden" name="id" value={c.id} /><input name="review_note" maxLength={300} placeholder="Reason (private, optional)" aria-label="Reason, private" />
-            <Submit variant="subtle" label="Saving…"><XCircle size={16} aria-hidden /> Not received</Submit>
+            <SubmitButton variant="subtle" pendingLabel="Saving…"><XCircle size={16} aria-hidden /> Not received</SubmitButton>
           </form>
         </div>
       </div>

@@ -3,12 +3,13 @@ import { after } from "next/server";
 import { syncIfStale } from "@/lib/google-drive";
 import Image from "next/image";
 import { ArrowRight, Clapperboard, Eye, Instagram, LockKeyhole, ShieldCheck, Youtube } from "lucide-react";
-import { buildLedger, ledgerTotals, todayAndYesterday, todayInIndia } from "@/lib/billing";
+import { activeWeeks, pricingState, buildLedger, ledgerTotals, todayAndYesterday, todayInIndia } from "@/lib/billing";
 import { getPublicDashboard } from "@/lib/data";
 import { getPublicInvoices, type PublicInvoice } from "@/lib/invoices-server";
 import { PublicInvoices } from "@/components/public-invoices";
 import { publicLedgerReel } from "@/lib/public-ledger";
 import { isConfigured } from "@/lib/supabase";
+import { briefWeek } from "@/lib/models";
 import { Header, OverviewTotals } from "@/components/ui";
 import { WeekLedger, UnpricedReels } from "@/components/week-ledger";
 import { ActivityPanel } from "@/components/activity";
@@ -69,11 +70,11 @@ export default async function HomePage() {
       {!configured && <div className="public-setup-note">The portal isn&apos;t connected to its database yet, so no deliveries or payments are shown. (Admin: set the Supabase variables in your environment.)</div>}
       {databaseError ? <div className="public-setup-note" role="alert"><strong>Reel and payment records are temporarily unavailable.</strong> We couldn&apos;t reach the database, so no totals are shown rather than showing incorrect ones. Please refresh in a few minutes.</div> : <>
         <OverviewTotals totals={dashboard.totals} />
-        {configured && <ReportPayment weeks={dashboard.weeks} />}
+        {configured && <ReportPayment weeks={dashboard.weeks.filter(w => w.starting <= todayInIndia()).map(briefWeek)} />}
         <ActivityPanel daily={dashboard.daily} sync={dashboard.sync} clientView />
         <div id="ledger" className="ledger-anchor" tabIndex={-1} />
-        <UnpricedReels reels={dashboard.reels} clientView />
-        <WeekLedger weeks={dashboard.weeks} clientView />
+        <UnpricedReels reels={dashboard.reels.filter(r => pricingState(r) === "review")} clientView />
+        <WeekLedger weeks={activeWeeks(dashboard.weeks)} clientView />
         <PublicInvoices invoices={invoices} />
       </>}
       <div className="public-bottom-strip"><ShieldCheck size={18} aria-hidden /><span>Read-only view. Only the studio admin can edit reels and payments. Opening a Google Drive file may need Drive sharing permission.</span><Link href="/login">Studio login <ArrowRight size={14} aria-hidden /></Link></div>
