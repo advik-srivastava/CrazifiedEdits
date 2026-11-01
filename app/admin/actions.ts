@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { serviceDb, userDb } from "@/lib/supabase";
 import { googleFolderId, validAmount, validDate, validDuration, validUrl, statuses, paymentMethods } from "@/lib/validation";
-import { BILLED_STATES, sundayFor, todayInIndia, withinStandardLength } from "@/lib/billing";
+import { allowedWeeks, BILLED_STATES, prettyDate, reelWeek, shiftISODate, sundayFor, todayInIndia, withinStandardLength } from "@/lib/billing";
 import { ensureDriveWatch, stopDriveWatch, syncGoogleDrive } from "@/lib/google-drive";
 import type { Reel, ReelStatus } from "@/lib/models";
 import { canPurge, deletePatch, isDeleted, restorePatch } from "@/lib/reel-delete";
@@ -29,6 +29,19 @@ function normalizedStatus(value: string): ReelStatus {
   if (!statuses.includes(value as ReelStatus)) throw new Error("Invalid delivery status");
   return value as ReelStatus;
 }
+/** Validate a chosen billing week: "" means the delivery week; otherwise one of the 4 weeks before it. */
+function weekOverride(raw: string, delivery: string | null): string | null {
+  if (!raw || !delivery) return null;
+  if (!allowedWeeks(delivery).includes(raw)) throw new Error("A reel can only count in its delivery week or one of the 4 weeks before it.");
+  return raw === sundayFor(delivery) ? null : raw;
+}
+/** Warn when a reel moves into a week that already has a weekly invoice (invoices are snapshots). */
+async function invoicedWeekNote(week: string | null): Promise<string> {
+  if (!week) return "";
+  const { data } = await serviceDb().from("invoices").select("number").eq("status", "issued").eq("kind", "weekly").eq("period_end", week).limit(1);
+  const n = data?.[0]?.number;
+  return n ? ` Note: that week is already invoiced as ${n}, which doesn't include this reel. Void ${n} and generate it again to include it.` : "";
+}
 /** A confirmed price only applies to reels outside the standard ₹600 rule (over 60 s or unknown length). */
 function confirmedPrice(raw: string, duration: number | null): number | null {
   if (!raw) return null;
@@ -52,6 +65,7 @@ export async function saveReel(form: FormData) {
     const { data, error } = await serviceDb().from("reels").update({
       title, status, duration_seconds: duration, delivery_date: delivery,
       confirmed_rate_inr: confirmedPrice(field(form, "confirmed_rate_inr"), duration),
+      ...(form.has("billing_week_override") ? { billing_week_override: weekOverride(field(form, "billing_week_override"), delivery) } : {}),
       client_url: validUrl(linkValue), notes: field(form, "notes").slice(0, 2000), updated_at: new Date().toISOString()
     }).eq("id", id).select("id").single();
     if (error || !data) throw new Error("Unable to save the reel. If this mentions a missing column, run sql/migrate_v1_3.sql.");
@@ -344,4 +358,63 @@ export async function saveInvoiceDetails(form: FormData) {
     await saveInvoiceProfile(raw);
   } catch (error) { fail(error); }
   success("Invoice details saved. New invoices will use them.", "#invoices");
+}
+
+// ------------------------------------------------------------------ billing week & revised versions
+const MIGRATION_17 = "Run sql/migrate_v1_7.sql in the Supabase SQL Editor to move reels between weeks.";
+/** Count a reel in another week: "previous" (the week before its delivery week), "auto" (its delivery week) or a Sunday. */
+export async function moveReelWeek(form: FormData) {
+  await requireAdmin();
+  let message = "";
+  try {
+    const id = uuid(field(form, "id"), "reel");
+    const db = serviceDb();
+    const { data: reel, error } = await db.from("reels").select("id,title,delivery_date,status").eq("id", id).single();
+    if (error || !reel) throw new Error("Reel not found.");
+    if (!reel.delivery_date || !BILLED_STATES.has(reel.status)) throw new Error("Mark the reel delivered first, then choose its billing week.");
+    const target = field(form, "week");
+    const week = target === "auto" ? null : target === "previous" ? shiftISODate(sundayFor(reel.delivery_date), -7) : weekOverride(target, reel.delivery_date);
+    const { error: upErr } = await db.from("reels").update({ billing_week_override: week, updated_at: new Date().toISOString() }).eq("id", id);
+    if (upErr) throw new Error(/billing_week_override/.test(upErr.message) ? MIGRATION_17 : "Could not change the billing week.");
+    const shown = week ?? sundayFor(reel.delivery_date);
+    message = `“${reel.title.slice(0, 50)}” now counts in the week ${prettyDate(shiftISODate(shown, -6))} – ${prettyDate(shown)}.` + await invoicedWeekNote(week);
+  } catch (error) { fail(error); }
+  success(message, "#reels");
+}
+/**
+ * Mark a new upload as the revised version of an earlier reel (e.g. changes the client asked for).
+ * The revision is delivered and counts in the ORIGINAL's billing week; the original is deleted from billing
+ * (restorable), so the client is charged once.
+ */
+export async function markAsRevision(form: FormData) {
+  await requireAdmin();
+  let message = "";
+  try {
+    const id = uuid(field(form, "id"), "reel"), originalId = uuid(field(form, "original_id"), "original reel");
+    if (id === originalId) throw new Error("A reel can't be a revision of itself.");
+    const db = serviceDb();
+    const { data: rows, error } = await db.from("reels").select("*").in("id", [id, originalId]);
+    if (error) throw new Error("Could not load the reels.");
+    const rev = (rows as Reel[]).find(r => r.id === id), orig = (rows as Reel[]).find(r => r.id === originalId);
+    if (!rev || !orig) throw new Error("Reel not found.");
+    if (isDeleted(orig)) throw new Error("The original reel is already deleted.");
+    const today = todayInIndia();
+    const delivery = rev.delivery_date || today;
+    const origWeek = reelWeek(orig) ?? sundayFor(delivery);
+    // The original's week must be the revision's own week or up to 4 weeks earlier.
+    const week = allowedWeeks(delivery).includes(origWeek) ? (origWeek === sundayFor(delivery) ? null : origWeek) : null;
+    const now = new Date().toISOString();
+    const { error: e1 } = await db.from("reels").update({
+      status: BILLED_STATES.has(rev.status) ? rev.status : "delivered", delivery_date: delivery, billing_week_override: week, revision_of: orig.id,
+      confirmed_rate_inr: rev.confirmed_rate_inr ?? orig.confirmed_rate_inr ?? null, updated_at: now
+    }).eq("id", rev.id);
+    if (e1) throw new Error(/billing_week_override|revision_of/.test(e1.message) ? MIGRATION_17 : "Could not save the revision.");
+    const { error: e2 } = await db.from("reels").update(deletePatch(orig, now)).eq("id", orig.id);
+    if (e2) throw new Error("The revision was saved, but the original couldn't be removed from billing. Delete it manually.");
+    const w = week ?? sundayFor(delivery);
+    message = `Saved as the revised version of “${orig.title.slice(0, 40)}”. It counts in the week ${prettyDate(shiftISODate(w, -6))} – ${prettyDate(w)}; the original was removed from billing (restore it from Deleted if needed).`;
+    const { data: inv } = await db.from("invoices").select("number").eq("status", "issued").eq("kind", "weekly").eq("period_end", w).limit(1);
+    if (inv?.[0]) message += ` That week's invoice ${inv[0].number} already billed the original, so there's no extra charge.`;
+  } catch (error) { fail(error); }
+  success(message, "#reels");
 }

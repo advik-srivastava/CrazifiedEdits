@@ -434,3 +434,14 @@ ul.mobile-delivery-list,ul.payments-list,.activity-list,.sync-log ul{list-style:
 .invoice-older>summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-weight:750;font-size:13px;color:var(--primary);border-top:1px solid #f0f1f5}
 .invoice-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));overflow:visible}
 @media(max-width:470px){.invoice-tab{padding:0 4px;font-size:12px}.invoice-tab span{margin-left:2px;padding:1px 5px}}
+/* Billing week / revised versions */
+.flag-info{background:#eef0ff;color:#4b3fd4}
+.week-tools{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 12px;margin-bottom:12px;border:1px dashed #cfc8ff;border-radius:12px;background:#faf9ff;font-size:13px;color:#4a5064}
+.week-tools>svg{color:var(--primary);flex-shrink:0}
+.week-tools>span{flex:1 1 200px;min-width:0}
+.revision-tools{margin-bottom:12px;padding:10px 12px;border:1px solid var(--border);border-radius:12px}
+.revision-tools>label{display:flex;flex-wrap:wrap;align-items:center;gap:6px;font-weight:750;font-size:13px;color:#4a5064;margin-bottom:8px}
+.revision-row{display:flex;flex-wrap:wrap;gap:10px}
+.revision-row select{flex:1 1 220px;min-width:0;min-height:44px;border:1px solid var(--border);border-radius:10px;padding:0 10px;background:#fff}
+.moved-note{display:block;font-size:11px;color:#4b3fd4;font-weight:700}
+@media(max-width:760px){.week-tools .button,.revision-row .button{width:100%}}

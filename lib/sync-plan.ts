@@ -163,6 +163,9 @@ export function normalizeTitle(title: string): string {
     .replace(/\s*[-_ ]\s*copy$/, "")
     .replace(/\s*\(\d+\)$/, "")
     .replace(/[^a-z0-9ऀ-ॿ]+/g, " ")
+    .trim()
+    // Revision markers at the end: "v2", "rev 3", "revised", "final", "edited", "changes", "updated", "new" (repeatable).
+    .replace(/(?:\s+(?:v\d+|ver\s*\d+|version\s*\d+|rev\s*\d*|revised|revision|final|edited|edit\s*\d*|changes|changed|updated|new|fixed))+$/, "")
     .trim();
 }
 /** Reels still pending review whose title matches another non-cancelled reel: likely re-uploads. */

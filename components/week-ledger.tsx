@@ -22,6 +22,10 @@ export function FeeLabel({ reel }: { reel: LedgerReel }) {
   if (state === "review") return <Pill tone="orange">Pricing review</Pill>;
   return <span title={state === "confirmed" ? "Confirmed price for a longer reel" : "Standard reel up to 60 seconds"}>{formatINR(reelFee(reel))}{state === "confirmed" && <small className="fee-note"> confirmed</small>}</span>;
 }
+/** Shown when a reel delivered in a later week counts in this one (e.g. changes delivered the following Monday). */
+function MovedNote({ reel }: { reel: LedgerReel }) {
+  return reel.delivery_date && reel.week_ending && reel.week_ending !== sundayFor(reel.delivery_date) ? <small className="moved-note">counted in this week</small> : null;
+}
 function WeekReels({ week }: { week: WeekSummary }) {
   const visible = [...week.reels].sort((a, b) => (b.delivery_date || "").localeCompare(a.delivery_date || ""));
   if (!visible.length) return <Empty title="No reels delivered this week" description="This is an empty billing week, not missing data. Reels appear here as soon as they're marked delivered." icon={<Clapperboard />} />;
@@ -30,14 +34,14 @@ function WeekReels({ week }: { week: WeekSummary }) {
       <table className="data-table"><thead><tr><th scope="col">REEL / VIDEO</th><th scope="col">DELIVERED</th><th scope="col">DURATION</th><th scope="col">STATUS</th><th scope="col" className="align-right">AMOUNT</th><th scope="col" className="align-right">GOOGLE DRIVE</th></tr></thead>
         <tbody>{visible.map(reel => <tr key={reel.key}>
           <td><div className="file-name"><span className="small-file-icon"><Video size={16} /></span><span><strong title={reel.title}>{reel.title}</strong><small>{reelSource(reel.source)}</small></span></div></td>
-          <td>{prettyDate(reel.delivery_date!)}</td><td className="mono">{durationLabel(reel.duration_seconds)}</td><td><Status status={reel.status} /></td>
+          <td>{prettyDate(reel.delivery_date!)}<MovedNote reel={reel} /></td><td className="mono">{durationLabel(reel.duration_seconds)}</td><td><Status status={reel.status} /></td>
           <td className="align-right strong mono"><FeeLabel reel={reel} /></td>
           <td className="align-right"><FileAccess reel={reel} /></td>
         </tr>)}</tbody></table>
     </div>
     <ul className="mobile-delivery-list" aria-label="Reels delivered this week">{visible.map(reel => <li className="mobile-reel-card" key={reel.key}>
       <div className="mobile-reel-top"><div className="mobile-reel-title"><span className="small-file-icon"><Video size={17} /></span><div><strong>{reel.title}</strong><small>{reelSource(reel.source)}</small></div></div><Status status={reel.status} /></div>
-      <div className="mobile-reel-details"><span>{prettyDate(reel.delivery_date!)}</span><span>{durationLabel(reel.duration_seconds)}</span><strong><FeeLabel reel={reel} /></strong></div>
+      <div className="mobile-reel-details"><span>{prettyDate(reel.delivery_date!)}<MovedNote reel={reel} /></span><span>{durationLabel(reel.duration_seconds)}</span><strong><FeeLabel reel={reel} /></strong></div>
       <div className="mobile-reel-action"><FileAccess reel={reel} /></div>
     </li>)}</ul>
   </>;

@@ -1,5 +1,5 @@
 import type { LedgerReel, Payment, Reel } from "./models";
-import { BILLED_STATES, confirmedRate } from "./billing";
+import { BILLED_STATES, confirmedRate, reelWeek } from "./billing";
 
 /** Short, non-reversible display key so internal database IDs never reach the browser. */
 export function opaqueKey(id: string): string {
@@ -11,7 +11,7 @@ export function opaqueKey(id: string): string {
 /** Admin projection: keeps the real ID as the key (the admin UI never leaves the server-rendered admin page). */
 export function adminLedgerReel(r: Reel): LedgerReel {
   return {
-    key: r.id, title: r.title, source: r.source, status: r.status, delivery_date: r.delivery_date,
+    key: r.id, title: r.title, source: r.source, status: r.status, delivery_date: r.delivery_date, week_ending: reelWeek(r),
     duration_seconds: r.duration_seconds, confirmed_rate_inr: confirmedRate(r), client_url: r.client_url, drive_web_url: r.drive_web_url
   };
 }
@@ -25,6 +25,7 @@ export function publicLedgerReel(r: Reel): LedgerReel {
     source: r.source,
     status: r.status,
     delivery_date: r.delivery_date,
+    week_ending: reelWeek(r),
     duration_seconds: r.duration_seconds,
     confirmed_rate_inr: confirmedRate(r),
     client_url: r.client_url,

@@ -69,6 +69,20 @@ export function reelFee(reel: Priceable): number {
 }
 export function billable(reel: Priceable): boolean { return reelFee(reel) > 0; }
 
+/**
+ * The billing week (its Sunday) a reel counts in: normally the week of its delivery date, or an earlier
+ * week you chose (e.g. changes delivered on Monday for a reel from the week before).
+ */
+export function reelWeek(reel: { delivery_date: string | null; billing_week_override?: string | null; week_ending?: string | null }): string | null {
+  if (!reel.delivery_date) return null;
+  const chosen = reel.billing_week_override ?? reel.week_ending;
+  return chosen && /^\d{4}-\d{2}-\d{2}$/.test(chosen) && sundayFor(chosen) === chosen ? chosen : sundayFor(reel.delivery_date);
+}
+/** Weeks a reel delivered on `delivery` may be moved to: its own week and up to `back` earlier weeks (newest first). */
+export function allowedWeeks(delivery: string, back = 4): string[] {
+  const own = sundayFor(delivery);
+  return Array.from({ length: back + 1 }, (_, i) => shiftISODate(own, -7 * i));
+}
 /** All consecutive Monday–Sunday billing periods covering 2026 through 2030.
  * The first/last period may cross a calendar-year boundary. */
 export function billingCalendar(): { starting: string; ending: string }[] {
@@ -100,7 +114,7 @@ export function buildLedger(reels: LedgerReel[], payments: Payment[], today: str
     // The delivery log contains every delivered reel, including ones awaiting a
     // pricing review; only priced reels contribute to the invoice.
     if (!reel.delivery_date || !BILLED_STATES.has(reel.status)) continue;
-    const w = ensure(sundayFor(reel.delivery_date));
+    const w = ensure(reelWeek(reel)!);
     w.reels.push(reel);
     w.delivered++;
     const fee = reelFee(reel);

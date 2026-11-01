@@ -151,6 +151,24 @@ try {
   const weeklyInv = (await q(`INSERT INTO invoices (number,kind,period_start,period_end,issue_date,due_date,item_count,total) VALUES ('CS-MS-03','weekly','2026-10-26','2026-11-01','2026-11-01','2026-11-08',6,3600) RETURNING id`)).rows[0].id;
   await q("UPDATE invoices SET status='void', voided_at=now(), superseded_by=$1 WHERE number='CS-MS-01'", [weeklyInv]);
   ok((await q("SELECT superseded_by=$1 r FROM invoices WHERE number='CS-MS-01'", [weeklyInv])).rows[0].r === true, "a daily invoice can point to the weekly invoice that replaced it");
+  // V1.7: billing week override and revisions.
+  await q(fs.readFileSync(repo + "migrate_v1_7.sql", "utf8"));
+  await q(fs.readFileSync(repo + "migrate_v1_7.sql", "utf8"));
+  ok(true, "migrate_v1_7.sql applies twice without error");
+  const r7 = (await q("INSERT INTO reels (title,status,delivery_date) VALUES ('Monday changes','delivered','2026-11-02') RETURNING id, to_char(billing_week_ending,'YYYY-MM-DD') w")).rows[0];
+  ok(r7.w === "2026-11-08", `delivery week by default (${r7.w})`);
+  await q("UPDATE reels SET billing_week_override='2026-11-01' WHERE id=$1", [r7.id]);
+  ok((await q("SELECT to_char(billing_week_ending,'YYYY-MM-DD') w FROM reels WHERE id=$1", [r7.id])).rows[0].w === "2026-11-01", "override moves the billing week");
+  await q("UPDATE reels SET billing_week_override=NULL WHERE id=$1", [r7.id]);
+  ok((await q("SELECT to_char(billing_week_ending,'YYYY-MM-DD') w FROM reels WHERE id=$1", [r7.id])).rows[0].w === "2026-11-08", "clearing the override restores the delivery week");
+  let notSunday = false; try { await q("UPDATE reels SET billing_week_override='2026-11-02' WHERE id=$1", [r7.id]); } catch { notSunday = true; }
+  ok(notSunday, "override must be a Sunday");
+  let selfRev = false; try { await q("UPDATE reels SET revision_of=id WHERE id=$1", [r7.id]); } catch { selfRev = true; }
+  ok(selfRev, "a reel can't be a revision of itself");
+  const orig = (await q("INSERT INTO reels (title,status,delivery_date) VALUES ('Original','delivered','2026-11-01') RETURNING id")).rows[0].id;
+  await q("UPDATE reels SET revision_of=$2 WHERE id=$1", [r7.id, orig]);
+  await q("DELETE FROM reels WHERE id=$1", [orig]);
+  ok((await q("SELECT revision_of FROM reels WHERE id=$1", [r7.id])).rows[0].revision_of === null, "deleting the original clears the link, keeps the revision");
   // A fresh project path: schema.sql then migrate_v1_3.sql.
   await q("DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
   await q(fs.readFileSync(repo + "schema.sql", "utf8"));
@@ -158,7 +176,8 @@ try {
   await q(fs.readFileSync(repo + "migrate_v1_4.sql", "utf8"));
   await q(fs.readFileSync(repo + "migrate_v1_5.sql", "utf8"));
   await q(fs.readFileSync(repo + "migrate_v1_6.sql", "utf8"));
-  ok(true, "fresh install: schema.sql + migrate_v1_3 … v1_6 apply cleanly");
+  await q(fs.readFileSync(repo + "migrate_v1_7.sql", "utf8"));
+  ok(true, "fresh install: schema.sql + migrate_v1_3 … v1_7 apply cleanly");
 } catch (e) { console.error("ERROR", e.message); fails++; }
 finally { await c.end(); await server.stop(); }
 console.log(fails ? `${fails} FAILED` : "ALL MIGRATION CHECKS PASSED");

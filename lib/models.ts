@@ -29,6 +29,9 @@ export type Reel = {
   status_before_removal?: ReelStatus | null;
   /** Set when the reel is deleted (by you, or because its file was deleted from Drive). Hidden from the library. */
   deleted_at?: string | null;
+  // V1.7: count in an earlier billing week (its Sunday); revised version of another reel.
+  billing_week_override?: string | null;
+  revision_of?: string | null;
 };
 /** Fields that are safe to show on the public client dashboard. No internal IDs. */
 export type LedgerReel = {
@@ -37,6 +40,8 @@ export type LedgerReel = {
   source: Reel["source"];
   status: ReelStatus;
   delivery_date: string | null;
+  /** Sunday of the billing week the reel counts in (usually the week of delivery_date). */
+  week_ending: string | null;
   duration_seconds: number | null;
   confirmed_rate_inr: number | null;
   client_url: string | null;

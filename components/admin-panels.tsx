@@ -1,13 +1,13 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useFormStatus } from "react-dom";
-import { AlertCircle, ArrowUpRight, CheckCircle2, Cloud, ExternalLink, FileVideo, FolderOpen, Link2, PlusCircle, RefreshCcw, Settings2, Shield, X, Clock3, PackageCheck, Copy, CloudOff, History, Pencil, Zap, Wand2 , Trash2, RotateCcw } from "lucide-react";
+import { AlertCircle, ArrowUpRight, CheckCircle2, Cloud, ExternalLink, FileVideo, FolderOpen, Link2, PlusCircle, RefreshCcw, Settings2, Shield, X, Clock3, PackageCheck, Copy, CloudOff, History, Pencil, Zap, Wand2 , Trash2, RotateCcw , CalendarClock , GitBranch } from "lucide-react";
 import type { Connection, Payment, Reel, Settings, SyncEvent } from "@/lib/models";
-import { billingCalendar, durationLabel, formatINR, prettyDate, prettyDateTime, pricingState, reelFee, sundayFor, todayInIndia, uploadDateOf, withinStandardLength } from "@/lib/billing";
+import { billingCalendar, durationLabel, formatINR, prettyDate, prettyDateTime, pricingState, reelFee, sundayFor, todayInIndia, uploadDateOf, withinStandardLength, allowedWeeks, BILLED_STATES, reelWeek, shiftISODate } from "@/lib/billing";
 import { possibleDuplicates } from "@/lib/sync-plan";
 import { canPurge, isDeleted } from "@/lib/reel-delete";
 import { paymentMethods } from "@/lib/validation";
-import { addManualReel, disconnectGoogleDrive, deleteReel, markDelivered, purgeReel, reconnectNotifications, removePayment, restoreReel, saveAutomation, saveFolder, savePayment, saveReel, syncNow, updatePayment } from "@/app/admin/actions";
+import { addManualReel, disconnectGoogleDrive, deleteReel, markAsRevision, markDelivered, moveReelWeek, purgeReel, reconnectNotifications, removePayment, restoreReel, saveAutomation, saveFolder, savePayment, saveReel, syncNow, updatePayment } from "@/app/admin/actions";
 import { Empty, Pill, SectionHeading, Status } from "./ui";
 
 export function SubmitButton({ children, variant = "primary", pendingLabel = "Saving…" }: { children: React.ReactNode, variant?: "primary" | "secondary" | "subtle" | "danger", pendingLabel?: string }) {
@@ -53,8 +53,11 @@ export function AddReelForm() {
 }
 
 type Filter = "all" | "discovered" | "review" | "delivered" | "approved" | "revision" | "cancelled" | "missing" | "deleted";
-function ReelFlags({ reel, duplicateOf }: { reel: Reel; duplicateOf?: Reel }) {
+const weekRange = (sunday: string) => `${prettyDate(shiftISODate(sunday, -6))} – ${prettyDate(sunday)}`;
+function ReelFlags({ reel, duplicateOf, original }: { reel: Reel; duplicateOf?: Reel; original?: Reel }) {
   const flags: React.ReactNode[] = [];
+  if (reel.billing_week_override && reel.delivery_date && !isDeleted(reel)) flags.push(<span key="week" className="reel-flag flag-info"><CalendarClock size={13} aria-hidden />Counts in week {weekRange(reel.billing_week_override)}</span>);
+  if (reel.revision_of) flags.push(<span key="revof" className="reel-flag flag-info"><GitBranch size={13} aria-hidden />Revised version{original ? ` of “${original.title}”` : ""}</span>);
   if (duplicateOf) flags.push(<span key="dup" className="reel-flag flag-warn"><Copy size={13} aria-hidden />Possible re-upload of “{duplicateOf.title}”</span>);
   if (pricingState(reel) === "review") flags.push(<span key="price" className="reel-flag flag-warn"><AlertCircle size={13} aria-hidden />Pricing review required</span>);
   const was = reel.status_before_removal ? ` (was ${reel.status_before_removal === "discovered" ? "pending" : reel.status_before_removal})` : "";
@@ -74,10 +77,40 @@ function ReelEditor({ reel }: { reel: Reel }) {
     <div className="field"><label htmlFor={`s-${reel.id}`}>Status</label><select id={`s-${reel.id}`} name="status" defaultValue={reel.status}><option value="discovered">Pending review (not billed)</option><option value="delivered">Delivered</option><option value="approved">Approved</option><option value="revision">Revision requested</option><option value="cancelled">Cancelled (not billed)</option></select></div>
     <div className="field"><label htmlFor={`d-${reel.id}`}>Duration in seconds</label><input id={`d-${reel.id}`} type="number" inputMode="numeric" name="duration_seconds" min="1" max="86400" step="1" value={duration} onChange={e => setDuration(e.target.value)} placeholder="e.g. 60" /></div>
     <div className="field"><label htmlFor={`dd-${reel.id}`}>Delivery date (IST)</label><input id={`dd-${reel.id}`} type="date" name="delivery_date" defaultValue={reel.delivery_date || ""} /></div>
+    {reel.delivery_date && <div className="field"><label htmlFor={`w-${reel.id}`}>Counts in billing week</label><select id={`w-${reel.id}`} name="billing_week_override" defaultValue={reel.billing_week_override ?? ""}>
+      {allowedWeeks(reel.delivery_date).map((w, i) => <option key={w} value={i === 0 ? "" : w}>{i === 0 ? `Delivery week · ${weekRange(w)}` : `${i === 1 ? "Last week" : `${i} weeks earlier`} · ${weekRange(w)}`}</option>)}
+    </select></div>}
     <div className="field"><label htmlFor={`p-${reel.id}`}>Confirmed price (₹) {!needsPrice && <span className="optional">standard ₹600 applies</span>}</label><input id={`p-${reel.id}`} type="number" inputMode="decimal" name="confirmed_rate_inr" min="1" step="0.01" defaultValue={reel.confirmed_rate_inr ?? ""} placeholder={needsPrice ? "Required to bill this reel" : "Not needed"} disabled={!needsPrice} /></div>
     <div className="field wide"><label htmlFor={`c-${reel.id}`}>Client-viewable link <span className="optional">optional, overrides the Drive link</span></label><input id={`c-${reel.id}`} type="url" inputMode="url" name="client_url" defaultValue={reel.client_url || ""} placeholder="Paste a share link if needed" /></div>
     <div className="field wide"><label htmlFor={`n-${reel.id}`}>Notes <span className="optional">private, never shown to the client</span></label><textarea id={`n-${reel.id}`} rows={2} name="notes" defaultValue={reel.notes || ""} placeholder="Revision details or context" /></div>
     <div className="wide edit-footer"><div className="edit-links">{reel.drive_web_url && <a target="_blank" rel="noopener noreferrer" href={reel.drive_web_url}><ExternalLink size={15} aria-hidden /> Original Drive file</a>}<span className="muted mini-note">{needsPrice ? "Over 60 s or unknown length: billed only at the confirmed price." : "Delivered reels up to 60 s bill at ₹600."}</span></div><SubmitButton>Save changes</SubmitButton></div>
+  </form>;
+}
+/** Count a delivered reel in last week (changes asked for after the week ended), or back in its own week. */
+function WeekTools({ reel }: { reel: Reel }) {
+  if (!reel.delivery_date || !BILLED_STATES.has(reel.status)) return null;
+  const own = sundayFor(reel.delivery_date), counted = reelWeek(reel)!;
+  return <form action={moveReelWeek} className="week-tools">
+    <input type="hidden" name="id" value={reel.id} />
+    <CalendarClock size={16} aria-hidden />
+    {counted === own
+      ? <><span>Delivered {prettyDate(reel.delivery_date)}. Changes for last week&apos;s work?</span><input type="hidden" name="week" value="previous" /><SubmitButton variant="secondary" pendingLabel="Moving…">Count in last week ({weekRange(shiftISODate(own, -7))})</SubmitButton></>
+      : <><span>Counts in week {weekRange(counted)} (delivered {prettyDate(reel.delivery_date)}).</span><input type="hidden" name="week" value="auto" /><SubmitButton variant="subtle" pendingLabel="Moving…">Count in its delivery week instead</SubmitButton></>}
+  </form>;
+}
+/** Mark this upload as the revised version of an earlier reel: it takes that reel's week, the original stops counting. */
+function RevisionTools({ reel, candidates, suggested }: { reel: Reel; candidates: Reel[]; suggested?: Reel }) {
+  if (reel.revision_of || !candidates.length) return null;
+  return <form action={markAsRevision} className="revision-tools" onSubmit={confirmSubmit("Save as a revised version?\n\nThis reel will count in the original's billing week, and the original will be removed from billing (you can restore it from Deleted). The client is charged once.")}>
+    <input type="hidden" name="id" value={reel.id} />
+    <label htmlFor={`rv-${reel.id}`}><GitBranch size={15} aria-hidden /> Revised version of an earlier reel? <span className="optional">changes the client asked for</span></label>
+    <div className="revision-row">
+      <select id={`rv-${reel.id}`} name="original_id" defaultValue={suggested?.id ?? ""} required>
+        <option value="" disabled>Choose the original reel…</option>
+        {candidates.map(c => <option key={c.id} value={c.id}>{c.title.slice(0, 70)} · {c.delivery_date ? prettyDate(c.delivery_date) : "pending"}</option>)}
+      </select>
+      <SubmitButton variant="secondary" pendingLabel="Saving…">Save as revision</SubmitButton>
+    </div>
   </form>;
 }
 function DeleteReel({ reel }: { reel: Reel }) {
@@ -106,6 +139,14 @@ export function AdminReelList({ reels }: { reels: Reel[] }) {
   const live = useMemo(() => reels.filter(r => !isDeleted(r)), [reels]);
   const deletedCount = reels.length - live.length;
   const duplicates = useMemo(() => possibleDuplicates(live), [live]);
+  const byId = useMemo(() => new Map(reels.map(r => [r.id, r])), [reels]);
+  // Originals a revision can replace: live, delivered reels from up to 5 weeks before this one, newest first.
+  const revisionCandidates = (reel: Reel) => {
+    const ref = reel.delivery_date || uploadDateOf(reel) || todayInIndia();
+    const from = shiftISODate(sundayFor(ref), -41);
+    return live.filter(r => r.id !== reel.id && r.delivery_date && BILLED_STATES.has(r.status) && r.delivery_date >= from && r.delivery_date <= ref)
+      .sort((a, b) => b.delivery_date!.localeCompare(a.delivery_date!)).slice(0, 40);
+  };
   const pending = live.filter(r => r.status === "discovered").length;
   const reviewPricing = live.filter(r => pricingState(r) === "review").length;
   const matches = (r: Reel) => filter === "deleted" ? isDeleted(r) : isDeleted(r) ? false : filter === "all" ? true : filter === "review" ? pricingState(r) === "review" : filter === "missing" ? !!r.drive_missing_at : r.status === filter;
@@ -116,10 +157,12 @@ export function AdminReelList({ reels }: { reels: Reel[] }) {
     <div className="tools-bar"><input type="search" aria-label="Search reels" className="search-input" placeholder="Search by reel name..." value={search} onChange={e => { setSearch(e.target.value); setMaxVisible(60); }} /><select value={filter} onChange={e => { setFilter(e.target.value as Filter); setMaxVisible(60); }} aria-label="Filter reels"><option value="all">All reels</option><option value="discovered">Pending review</option><option value="review">Pricing review required</option><option value="delivered">Delivered</option><option value="approved">Approved</option><option value="revision">Revision</option><option value="cancelled">Cancelled</option><option value="missing">No longer in Drive</option><option value="deleted">Deleted{deletedCount ? ` (${deletedCount})` : ""}</option></select></div>
     {!visible.length ? <Empty title="No reels found" description={filter === "deleted" ? "Nothing deleted. Deleted reels (by you, or because the file was deleted from Drive) appear here." : reels.length ? "Try another filter or search." : "Connect Google Drive and sync your delivery folder, or add a reel manually."} icon={<FileVideo />} /> : <div className="edit-list">{visible.map(reel => {
       const uploaded = uploadDateOf(reel);
-      return <details className={`reel-item ${reel.status === "discovered" ? "reel-pending" : ""} ${isDeleted(reel) ? "reel-deleted" : ""}`} key={reel.id}><summary><span className="file-icon"><FileVideo size={20} aria-hidden /></span><span className="reel-description"><strong title={reel.title}>{reel.title}</strong><small>{uploaded ? `Uploaded ${prettyDate(uploaded)}` : "Upload date unknown"} · {reel.delivery_date ? `Delivered ${prettyDate(reel.delivery_date)}` : "Not delivered"} · {durationLabel(reel.duration_seconds)} · {reel.source === "google_drive" ? "Google Drive" : reel.source === "onedrive" ? "OneDrive (legacy)" : "Manual"}</small><ReelFlags reel={reel} duplicateOf={duplicates.get(reel.id)} /></span><span className="reel-value">{pricingState(reel) === "review" ? "—" : formatINR(reelFee(reel))}</span><Status status={isDeleted(reel) ? "deleted" : reel.status} /><span className="edit-action">{isDeleted(reel) ? <>Restore <RotateCcw size={15} aria-hidden /></> : <>Edit <Settings2 size={15} aria-hidden /></>}</span></summary>
+      return <details className={`reel-item ${reel.status === "discovered" ? "reel-pending" : ""} ${isDeleted(reel) ? "reel-deleted" : ""}`} key={reel.id}><summary><span className="file-icon"><FileVideo size={20} aria-hidden /></span><span className="reel-description"><strong title={reel.title}>{reel.title}</strong><small>{uploaded ? `Uploaded ${prettyDate(uploaded)}` : "Upload date unknown"} · {reel.delivery_date ? `Delivered ${prettyDate(reel.delivery_date)}` : "Not delivered"} · {durationLabel(reel.duration_seconds)} · {reel.source === "google_drive" ? "Google Drive" : reel.source === "onedrive" ? "OneDrive (legacy)" : "Manual"}</small><ReelFlags reel={reel} duplicateOf={duplicates.get(reel.id)} original={reel.revision_of ? byId.get(reel.revision_of) : undefined} /></span><span className="reel-value">{pricingState(reel) === "review" ? "—" : formatINR(reelFee(reel))}</span><Status status={isDeleted(reel) ? "deleted" : reel.status} /><span className="edit-action">{isDeleted(reel) ? <>Restore <RotateCcw size={15} aria-hidden /></> : <>Edit <Settings2 size={15} aria-hidden /></>}</span></summary>
         <div className="edit-pane">
           {isDeleted(reel) ? <DeletedActions reel={reel} /> : <>
             {reel.status === "discovered" && <div className="quick-actions"><form action={markDelivered}><input type="hidden" name="id" value={reel.id} /><SubmitButton pendingLabel="Marking…"><PackageCheck size={16} aria-hidden /> Mark delivered today</SubmitButton></form></div>}
+            <WeekTools reel={reel} />
+            <RevisionTools reel={reel} candidates={revisionCandidates(reel)} suggested={duplicates.get(reel.id)} />
             <ReelEditor reel={reel} />
             <DeleteReel reel={reel} />
           </>}

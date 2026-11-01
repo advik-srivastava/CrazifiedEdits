@@ -5,7 +5,7 @@
  * it's created. Payments recorded "through" an invoice are ordinary payments for its week, linked to it.
  */
 import type { Reel } from "./models";
-import { mondayFor, reelFee, pricingState, shiftISODate, sundayFor, BILLED_STATES } from "./billing";
+import { mondayFor, reelFee, pricingState, reelWeek, shiftISODate, sundayFor, BILLED_STATES } from "./billing";
 
 export type InvoiceKind = "weekly" | "daily";
 export type InvoiceItem = { title: string; delivered: string; seconds: number | null; amount: number };
@@ -70,9 +70,17 @@ export function normalizeProfile(raw: unknown): InvoiceProfile {
 export function invoicePeriod(kind: InvoiceKind, date: string): { start: string; end: string } {
   return kind === "weekly" ? { start: mondayFor(date), end: sundayFor(date) } : { start: date, end: date };
 }
-/** Billed reels delivered in the period, oldest first. Reels awaiting a price are counted separately. */
-export function invoiceItems(reels: Reel[], start: string, end: string): { items: InvoiceItem[]; total: number; awaitingPrice: number } {
-  const inPeriod = reels.filter(r => !r.deleted_at && r.delivery_date && r.delivery_date >= start && r.delivery_date <= end && BILLED_STATES.has(r.status));
+/**
+ * Billed reels for an invoice, oldest first. Weekly: every reel counted in that billing week (including reels
+ * moved into it). Daily: reels delivered that day that still count in that day's week. Reels awaiting a price
+ * are counted separately.
+ */
+export function invoiceItems(reels: Reel[], start: string, end: string, kind: InvoiceKind = start === end ? "daily" : "weekly"): { items: InvoiceItem[]; total: number; awaitingPrice: number } {
+  const inPeriod = reels.filter(r => {
+    if (r.deleted_at || !r.delivery_date || !BILLED_STATES.has(r.status)) return false;
+    const week = reelWeek(r);
+    return kind === "weekly" ? week === end : r.delivery_date === start && week === sundayFor(start);
+  });
   const items = inPeriod.filter(r => reelFee(r) > 0)
     .sort((a, b) => a.delivery_date!.localeCompare(b.delivery_date!) || a.title.localeCompare(b.title))
     .map(r => ({ title: r.title.slice(0, 200), delivered: r.delivery_date!, seconds: r.duration_seconds, amount: reelFee(r) }));

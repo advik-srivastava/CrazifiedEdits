@@ -102,7 +102,7 @@ export async function createInvoice(kind: InvoiceKind, date: string, notes: stri
   const toReplace = kind === "weekly" ? overlapping.filter(i => i.kind === "daily") : [];
 
   const reels = await getReels();
-  const { items, total, awaitingPrice } = invoiceItems(reels, start, end);
+  const { items, total, awaitingPrice } = invoiceItems(reels, start, end, kind);
   if (!items.length) {
     const where = kind === "daily" ? "on this day" : "in this week";
     const pending = reels.filter(r => !r.deleted_at && r.status === "discovered" && (r.drive_created_at || r.first_seen_at) &&
