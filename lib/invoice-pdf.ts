@@ -96,7 +96,7 @@ export async function renderInvoicePdf(d: InvoicePdfData, a: InvoiceAssets): Pro
   const y2 = col("BILLED TO", to, M + 180, 135);
   // meta box
   const mx = A4.w - M - 190, mw = 190;
-  const meta: [string, string][] = [["Invoice no.", d.number], ["Issue date", day(d.issue_date)], ["Due date", day(d.due_date)], [d.kind === "weekly" ? "Billing week" : "Billing day", compactPeriod]];
+  const meta: [string, string][] = [["Invoice no.", d.number], ["Issue date", day(d.issue_date)], ["Due date", d.due_date === d.issue_date ? `${day(d.due_date)} (on receipt)` : day(d.due_date)], [d.kind === "weekly" ? "Billing week" : "Billing day", compactPeriod]];
   const mh = meta.length * 18 + 14;
   page.drawRectangle({ x: mx, y: y - mh + 10, width: mw, height: mh, color: C.tint });
   meta.forEach(([k, v], i) => {
@@ -166,7 +166,7 @@ export async function renderInvoicePdf(d: InvoicePdfData, a: InvoiceAssets): Pro
   if (d.profile.bank_details) payLines.push(...d.profile.bank_details.split("\n"));
   text(page, "PAYMENT DETAILS", M, y, 8, bold, C.primary); y -= 15;
   for (const l of (payLines.length ? payLines : ["Payment details on request."])) for (const w of wrap(l, regular, 9, tx - M - 20, 4)) { text(page, w, M, y, 9); y -= 12; }
-  for (const w of wrap(`Please mention ${d.number} in the payment note. Payable by ${day(d.due_date)}.`, regular, 8.5, tx - M - 20, 3)) { text(page, w, M, y, 8.5, regular, C.muted); y -= 11; }
+  for (const w of wrap(`Please mention ${d.number} in the payment note. ${d.due_date === d.issue_date ? `Due on receipt (${day(d.due_date)})` : `Payable by ${day(d.due_date)}`}.`, regular, 8.5, tx - M - 20, 3)) { text(page, w, M, y, 8.5, regular, C.muted); y -= 11; }
   y = Math.min(y - 10, yAfterTotals);
 
   // ---------------------------------------------------------------- notes + thanks

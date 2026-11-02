@@ -56,7 +56,8 @@ Admin → **Invoices** creates PDF invoices (no GST) to download and send to Moh
 - Each invoice is a snapshot: later edits or deleted reels don't change an invoice already sent.
 - **Invoice history**: every invoice is kept. Totals (invoices generated, total invoiced, paid, outstanding), the last invoice generated, and tabs: **Recent** (newest first), **Unpaid**, **Paid** (with the date each was fully paid, most recent first) and **Void** (including daily invoices replaced by a weekly one). Each invoice lists its payments. The client's homepage shows the same history (latest 8, older ones expandable) with paid dates.
 - **Record payment through this invoice** (full or part) adds a normal payment for that billing week, linked to the invoice. The weekly balance, the PDF's *Paid / Balance due*, and the client's **Invoices** list (homepage) all update.
-- **Invoice details**: number prefix, your business name, contact, address, UPI ID, bank details, payment terms, and the client's billing details.
+- **Due date**: every invoice is due the same day it is generated ("Due on receipt" on the PDF).
+- **Invoice details**: number prefix, your business name, contact, address, UPI ID, bank details and the client's billing details.
 - The PDF uses DM Sans and Manrope (SIL Open Font License, `assets/fonts/`). Only the admin can download PDFs; the homepage shows invoice number, period, total and status only.
 
 ## Privacy

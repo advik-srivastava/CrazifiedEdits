@@ -115,7 +115,7 @@ function ProfileForm({ profile }: { profile: InvoiceProfile }) {
       {f("email", "Email", { type: "email" })}{f("phone", "Phone", { type: "tel" })}
       {f("address", "Address", { area: true })}
       <div className="eyebrow wide">PAYMENT DETAILS (printed on the invoice)</div>
-      {f("upi_id", "UPI ID", { placeholder: "name@bank" })}{f("payment_terms_days", "Payment due (days after issue)", { type: "number" })}
+      {f("upi_id", "UPI ID", { placeholder: "name@bank" })}
       {f("bank_details", "Bank details", { area: true, placeholder: "Account name, number, IFSC" })}
       <div className="eyebrow wide">BILL TO</div>
       {f("client_name", "Client name")}{f("client_handle", "Handle")}

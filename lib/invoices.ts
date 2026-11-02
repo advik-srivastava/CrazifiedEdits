@@ -39,7 +39,7 @@ export const DEFAULT_PROFILE: InvoiceProfile = {
   client_handle: "@OkayMohit",
   client_address: "",
   client_email: "",
-  payment_terms_days: 7,
+  payment_terms_days: 0,
   footer_note: "Thank you for working with Crazified Studios."
 };
 const LIMITS: Record<keyof InvoiceProfile, number> = {

@@ -73,7 +73,7 @@ test("invoice details: defaults, trimming, limits, bad values ignored", () => {
   assert.deepEqual(normalizeProfile(null), DEFAULT_PROFILE);
   const p = normalizeProfile({ business_name: "  ", upi_id: " advik@upi ", payment_terms_days: "500", client_address: "x".repeat(400), evil: "<script>" });
   assert.equal(p.business_name, "Crazified Studios"); assert.equal(p.upi_id, "advik@upi");
-  assert.equal(p.payment_terms_days, 7); assert.equal(p.client_address.length, 300);
+  assert.equal(p.payment_terms_days, 0); assert.equal(p.client_address.length, 300);
   assert.ok(!("evil" in p));
   assert.equal(normalizeProfile({ payment_terms_days: "14" }).payment_terms_days, 14);
 });

@@ -7,7 +7,7 @@ import { getReels } from "./data";
 import { todayInIndia } from "./billing";
 import { opaqueKey } from "./public-ledger";
 import {
-  dueDate, fullyPaidOn, invoiceItems, invoicePayState, invoicePeriod, nextInvoiceNumber, normalizeProfile, periodsOverlap,
+  fullyPaidOn, invoiceItems, invoicePayState, invoicePeriod, nextInvoiceNumber, normalizeProfile, periodsOverlap,
   type InvoiceItem, type InvoiceKind, type InvoicePayState, type InvoiceProfile
 } from "./invoices";
 import { renderInvoicePdf } from "./invoice-pdf";
@@ -117,7 +117,7 @@ export async function createInvoice(kind: InvoiceKind, date: string, notes: stri
   for (let attempt = 0; attempt < 4; attempt++) {
     const { data: nums } = await db.from("invoices").select("number").like("number", `${profile.invoice_prefix}-%`);
     const number = nextInvoiceNumber((nums || []).map(n => n.number as string), profile.invoice_prefix);
-    const row = { number, kind, period_start: start, period_end: end, issue_date: issue, due_date: dueDate(issue, profile.payment_terms_days), items, item_count: items.length, total, profile, notes };
+    const row = { number, kind, period_start: start, period_end: end, issue_date: issue, due_date: issue /* due the same day it is generated */, items, item_count: items.length, total, profile, notes };
     const { data, error } = await db.from("invoices").insert(row).select("*").single();
     if (!error && data) {
       const created = data as InvoiceRow;
